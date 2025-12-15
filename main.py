@@ -460,14 +460,14 @@ In today's session, it will be about **{TOPIC}**.
 #### What will happen? – step by step  
 | Step | What you do | Time | What you provide |
 |------|-------------|------|------------------|
-| 1 | Read & sign the digital consent form | ≈ 2 min | e‑signature |
-| 2 | **Student Profile Survey** | ≈ 8 min | demographics, language skills, AI knowledge |
+| 1 | Read & sign the digital consent form | ≈ 5 min | e‑signature |
+| 2 | **Student Profile Survey** | ≈ 10 min | demographics, language skills, AI knowledge |
 | 3 | **{LABEL}** using LLM | ≈ 25 min | interact with AI assistant |
-| 4 | **Knowledge Test** | ≈ 10 min | answers to 5 quiz items |
-| 5 | **User‑Experience Questionnaire** | ≈ 8 min | 26 quick ratings |
-| 6 | Short verbal interview / Q&A | ≈ 5 min | feedback |
+| 4 | **Knowledge Test** | ≈ 10 min | answers to 8 quiz items |
+| 5 | **User‑Experience Questionnaire** | ≈ 10 min | 26 quick ratings |
+| 6 | Short feedback | ≈ 10 min | feedback |
 
-*Total time*: **~ 60 minutes**
+*Total time*: **~ 70 minutes**
 
 ---
 #### Your role  
@@ -1144,26 +1144,40 @@ elif st.session_state.current_page == "completion":
     if not st.session_state.get("completion_processed", False):
         st.session_state["completion_processed"] = True
         
+        print(f"\n{'='*60}")
+        print(f"📦 COMPLETION PAGE: Starting upload process at {datetime.now()}")
+        print(f"{'='*60}")
+        
         # Show processing status
         with st.spinner("Processing your responses..."):
             try:
                 sm = get_session_manager()
+                session_info = sm.get_session_info()
+                print(f"📋 Session ID: {session_info['session_id']}")
+                print(f"📁 Session directory: {sm.session_dir}")
                 
                 # Flush any remaining logs before final analytics
+                print(f"💾 Flushing learning logs...")
                 ll = get_learning_logger()
                 ll.save_logs(force=True)
                 
                 # Generate final analytics
+                print(f"📊 Generating final analytics...")
                 final_analytics_path = sm.create_final_analytics()
+                print(f"✅ Analytics saved to: {final_analytics_path}")
                 
                 # Upload to Supabase
+                print(f"☁️ Initializing Supabase storage...")
                 from supabase_storage import get_supabase_storage
                 storage = get_supabase_storage()
-                session_info = sm.get_session_info()
+                print(f"✅ Storage initialized, connected: {storage.connected}")
+                
                 session_id = session_info["session_id"]
                 
                 # Upload all session files
+                print(f"🚀 Calling storage.upload_session_files()...")
                 success = storage.upload_session_files(sm, DEV_MODE)
+                print(f"📤 Upload result: {'SUCCESS' if success else 'FAILED'}")
                 
                 # Mark session as completed in presence tracker
                 if presence:

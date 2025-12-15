@@ -47,7 +47,12 @@ class SupabaseStorage:
             self.ensure_bucket_exists()
             
         except Exception as e:
-            # Only show technical errors in dev mode
+            # Log connection failure for debugging
+            error_msg = f"Supabase initialization failed: {str(e)}"
+            logger.error(error_msg)
+            print(f"❌ SUPABASE INIT ERROR: {error_msg}")
+            print(f"📋 Full traceback:")
+            traceback.print_exc()
             # In production, silently fail - uploads will be handled gracefully later
             self.connected = False
     
@@ -186,9 +191,15 @@ class SupabaseStorage:
     
     def upload_session_files(self, session_manager, dev_mode: bool = False) -> bool:
         """Upload all local session files to Supabase Storage, maintaining original structure."""
+        print(f"\n{'='*60}")
+        print(f"🚀 UPLOAD START: upload_session_files() called at {datetime.now()}")
+        print(f"{'='*60}")
+        
         if not self.connected:
             error_msg = "Supabase not connected - cannot save data"
             logger.error(error_msg)
+            print(f"❌ UPLOAD BLOCKED: {error_msg}")
+            print(f"💡 Check Streamlit console for Supabase initialization errors above")
             # Don't show technical errors to participants
             return False
             
