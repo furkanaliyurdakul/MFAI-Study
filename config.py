@@ -9,6 +9,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List
 
+# ═══════════════════════════════════════════════════════════════════
+# DEBUG SETTINGS
+# ═══════════════════════════════════════════════════════════════════
+# Set to False in production to disable all debug print statements
+DEBUG_MODE = False  # Toggle this to enable/disable debug logging
+
 
 @dataclass
 class CourseConfig:

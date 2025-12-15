@@ -20,13 +20,17 @@ import atexit
 import json
 import streamlit as st
 
+# Import DEBUG_MODE before any debug prints
+from config import DEBUG_MODE
+
 # ── Page Config (MUST BE FIRST STREAMLIT COMMAND) ──────────────
 st.set_page_config(page_title="AI Learning Platform", layout="wide")
 
 # ── Authentication Check ──────────────────────────────────────
 from login_page import require_authentication
 credential_config = require_authentication()
-print("🔧 DEBUG: Authentication completed")
+if DEBUG_MODE:
+    print("🔧 DEBUG: Authentication completed")
 
 # ── Presence Tracker (for concurrent session monitoring) ────────
 try:
@@ -45,7 +49,8 @@ except Exception as e:
 # ── Initialize Session State (IMMEDIATELY AFTER AUTH) ─────────
 def ensure_session_state_initialized():
     """Ensure all required session state variables are initialized with defaults."""
-    print("🔧 DEBUG: Starting session state initialization")
+    if DEBUG_MODE:
+        print("🔧 DEBUG: Starting session state initialization")
     # --- tutor‑related objects that Gemini_UI expects -----------------
     DEFAULTS = {
         "exported_images": [],  # list[Path] – exported PPT slides
@@ -69,16 +74,19 @@ def ensure_session_state_initialized():
         "ueq_completed",
     ):
         st.session_state.setdefault(key, False if key != "current_page" else "home")
-    print("🔧 DEBUG: Session state initialization completed")
+    if DEBUG_MODE:
+        print("🔧 DEBUG: Session state initialization completed")
 
 # Always ensure session state is properly initialized
 ensure_session_state_initialized()
-print("🔧 DEBUG: About to start imports")
+if DEBUG_MODE:
+    print("🔧 DEBUG: About to start imports")
 
 # ── Configuration ──────────────────────────────────────────────
 from config import get_config, get_course_title, get_platform_name, get_ui_text
 config = get_config()
-print("🔧 DEBUG: Config loaded")
+if DEBUG_MODE:
+    print("🔧 DEBUG: Config loaded")
 
 # Language names for display
 language_names = {
@@ -173,21 +181,26 @@ if "language_code" not in st.session_state:
         st.session_state["fast_test_mode"] = False
     
     # CHECK CAPACITY AND REGISTER SESSION (except for dev mode)
-    print(f"🔧 DEBUG: Capacity check - presence={presence is not None}, credential_config={credential_config is not None}, dev_mode={credential_config.dev_mode if credential_config else 'N/A'}")
+    if DEBUG_MODE:
+        print(f"🔧 DEBUG: Capacity check - presence={presence is not None}, credential_config={credential_config is not None}, dev_mode={credential_config.dev_mode if credential_config else 'N/A'}")
     
     if presence and credential_config and not credential_config.dev_mode:
         session_info = sm.get_session_info()
-        print(f"🔧 DEBUG: Checking session {session_info['session_id']}")
+        if DEBUG_MODE:
+            print(f"🔧 DEBUG: Checking session {session_info['session_id']}")
         
         # Check if session already exists in database
         existing_session = presence.get_session_info(session_info["session_id"])
-        print(f"🔧 DEBUG: Existing session in DB: {existing_session is not None}")
+        if DEBUG_MODE:
+            print(f"🔧 DEBUG: Existing session in DB: {existing_session is not None}")
         
         if not existing_session:
             # New session - check capacity before registering
-            print(f"🔧 DEBUG: New session - checking capacity...")
+            if DEBUG_MODE:
+                print(f"🔧 DEBUG: New session - checking capacity...")
             can_start, message = presence.can_start_interview()
-            print(f"🔧 DEBUG: Capacity check result: can_start={can_start}, message={message}")
+            if DEBUG_MODE:
+                print(f"🔧 DEBUG: Capacity check result: can_start={can_start}, message={message}")
             
             if not can_start:
                 # Platform at capacity - show message and stop
@@ -542,14 +555,16 @@ Thank you for helping us understand how language affects AI-assisted learning!
     # Course content (slides + transcription) is loaded for everyone
     # Fast test mode just provides a mock profile to skip the survey
     if FAST_TEST_MODE and not st.session_state.get("fast_test_setup_completed", False):
-        print(f"🔧 DEBUG: Setting up fast test mode - loading mock profile")
+        if DEBUG_MODE:
+            print(f"🔧 DEBUG: Setting up fast test mode - loading mock profile")
         
         sample_path = Path(__file__).parent / "uploads" / "profile" / "Test_User_profile.txt" 
         if sample_path.exists():
             profile_txt = sample_path.read_text(encoding="utf-8")
             st.session_state.profile_text = profile_txt
             st.session_state.profile_dict = parse_detailed_student_profile(profile_txt)
-            print("🔧 DEBUG: Fast test mode mock profile loaded")
+            if DEBUG_MODE:
+                print("🔧 DEBUG: Fast test mode mock profile loaded")
         else:
             print(f"⚠️ WARNING: Mock profile not found at {sample_path}")
 
@@ -620,28 +635,34 @@ The AI assistant has access to all {config.course.total_slides} slides and the f
         )
 
         # Initialize Gemini chat only once per session
-        print("🔧 DEBUG: About to check gemini_chat initialization")
+        if DEBUG_MODE:
+            print("🔧 DEBUG: About to check gemini_chat initialization")
         if "gemini_chat" not in st.session_state:
-            print("🔧 DEBUG: Creating new Gemini chat session")
+            if DEBUG_MODE:
+                print("🔧 DEBUG: Creating new Gemini chat session")
             st.session_state.gemini_chat = client.chats.create(
                 model="gemini-2.5-flash",
                 history=[]
             )
             st.session_state.gemini_chat_initialized = False
-            print("🔧 DEBUG: Gemini chat session created")
+            if DEBUG_MODE:
+                print("🔧 DEBUG: Gemini chat session created")
 
         # Send base context only once per session  
         if not st.session_state.get("gemini_chat_initialized", False):
-            print("🔧 DEBUG: About to send base context to Gemini")
+            if DEBUG_MODE:
+                print("🔧 DEBUG: About to send base context to Gemini")
 
             base_ctx = make_base_context(
                 language_code=current_language()
             )
-            print("🔧 DEBUG: Base context created, sending to Gemini...")
+            if DEBUG_MODE:
+                print("🔧 DEBUG: Base context created, sending to Gemini...")
 
             st.session_state.gemini_chat.send_message(json.dumps(base_ctx))
             st.session_state.gemini_chat_initialized = True
-            print("🔧 DEBUG: Base context sent successfully")
+            if DEBUG_MODE:
+                print("🔧 DEBUG: Base context sent successfully")
 
             get_learning_logger().log_interaction(
                 interaction_type="prime_context",
@@ -666,14 +687,17 @@ The AI assistant has access to all {config.course.total_slides} slides and the f
         
 
         if DEV_MODE:
-            print("🔧 DEBUG: Starting dev mode interaction tracking")
+            if DEBUG_MODE:
+                print("🔧 DEBUG: Starting dev mode interaction tracking")
             # Live interaction tracking for development - TEMPORARILY DISABLED FOR DEBUGGING
             try:
-                print("🔧 DEBUG: About to call get_interaction_counts()")
+                if DEBUG_MODE:
+                    print("🔧 DEBUG: About to call get_interaction_counts()")
                 # TEMPORARILY COMMENTED OUT TO TEST IF THIS IS THE HANG POINT
                 # interaction_counts = get_learning_logger().get_interaction_counts()
                 interaction_counts = {"slide_explanations": 0, "manual_chat": 0, "total_user_interactions": 0}
-                print("🔧 DEBUG: get_interaction_counts() completed successfully (using mock data)")
+                if DEBUG_MODE:
+                    print("🔧 DEBUG: get_interaction_counts() completed successfully (using mock data)")
                 
                 st.sidebar.info(
                     f"{len(get_learning_logger().log_entries) if hasattr(get_learning_logger(), 'log_entries') else 0} interactions buffered"

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import streamlit as st
 from authentication import get_auth_manager, CredentialConfig
-from config import config
+from config import config, DEBUG_MODE
 
 
 def show_login_page() -> bool:
@@ -18,7 +18,8 @@ def show_login_page() -> bool:
     Returns:
         True if user successfully authenticated, False otherwise
     """
-    print("🔧 DEBUG: show_login_page() called")
+    if DEBUG_MODE:
+        print("🔧 DEBUG: show_login_page() called")
     auth_manager = get_auth_manager()
     
     # Header
@@ -165,18 +166,22 @@ def require_authentication() -> CredentialConfig:
     """
     auth_manager = get_auth_manager()
     
-    print(f"🔧 DEBUG: require_authentication called, is_authenticated: {auth_manager.is_authenticated()}")
+    if DEBUG_MODE:
+        print(f"🔧 DEBUG: require_authentication called, is_authenticated: {auth_manager.is_authenticated()}")
     
     if not auth_manager.is_authenticated():
-        print("🔧 DEBUG: Not authenticated, showing login page")
+        if DEBUG_MODE:
+            print("🔧 DEBUG: Not authenticated, showing login page")
         # Show login page and stop execution
         show_login_page()
         st.stop()
     
-    print("🔧 DEBUG: User authenticated, adding logout interface")
+    if DEBUG_MODE:
+        print("🔧 DEBUG: User authenticated, adding logout interface")
     # Add logout interface to sidebar
     show_logout_interface()
     
     config = auth_manager.get_current_config()
-    print(f"🔧 DEBUG: Returning config for user: {config.username if config else 'None'}")
+    if DEBUG_MODE:
+        print(f"🔧 DEBUG: Returning config for user: {config.username if config else 'None'}")
     return config
