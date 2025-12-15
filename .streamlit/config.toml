@@ -1,0 +1,32 @@
+[server]
+# Increase max upload size for video/audio files
+maxUploadSize = 200
+# Enable file watcher for hot reloading in development
+fileWatcherType = "auto"
+# Disable CORS for deployment
+enableCORS = false
+# Enable xsrf protection
+enableXsrfProtection = true
+
+[browser]
+# Disable gathering usage stats
+gatherUsageStats = false
+
+[runner]
+# Prevent memory leaks by clearing cached results more aggressively
+magicEnabled = false
+# Fast reruns to reduce memory buildup
+fastReruns = true
+
+[client]
+# Show detailed error messages (useful for debugging memory issues)
+showErrorDetails = true
+# Toolbar mode for deployment
+toolbarMode = "minimal"
+
+[theme]
+# Optional: Set theme colors (remove if not needed)
+primaryColor = "#0E4B99"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F0F2F6"
+textColor = "#262730"
