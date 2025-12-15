@@ -5,11 +5,26 @@ from session_manager import get_session_manager
 
 session_manager = get_session_manager()
 
+# Get session info once at the top for use throughout the page
+# This includes language_code, session_id, fake_name, etc.
+session_info_global = session_manager.get_session_info()
+
 # ---- UEQ CALCULATION FUNCTION ------
 def evaluate_ueq(raw: dict) -> dict:
     """Evaluate UEQ scores based on the raw responses.
     Returns dictionary with 'means' and 'grades' keys for session_manager.save_ueq().
     """
+    # Items where the POSITIVE word is on the LEFT in the UI → reverse (1..7 -> 7..1)
+    REVERSE = {3, 4, 5, 9, 10, 12, 17, 18, 19, 21, 23, 24}
+    
+    def orient_pos(v: int, idx: int) -> int:
+        """Orient value so 7 is always positive."""
+        return 8 - v if idx in REVERSE else v  # still 1..7, but oriented so 7 is positive
+    
+    def to_interval(v: int) -> int:
+        """Convert 1-7 (positive-oriented) to −3..+3."""
+        return v - 4  # 1..7 -> -3..+3
+    
     # UEQ scale definitions
     SCALES = {
         "Attractiveness": [1, 12, 14, 16, 24, 25],
@@ -30,10 +45,6 @@ def evaluate_ueq(raw: dict) -> dict:
         "Novelty": (0.78, 0.96),
     }
     
-    def to_interval(score: int) -> int:
-        """Convert 1-7 Likert to −3 … +3."""
-        return score - 4
-    
     def grade(mean: float, bench_mean: float, sd: float) -> str:
         """Grade the mean against benchmark."""
         if mean >= bench_mean + 0.5 * sd:
@@ -47,7 +58,12 @@ def evaluate_ueq(raw: dict) -> dict:
     # Calculate means and grades for each scale
     means, grades = {}, {}
     for scale, items in SCALES.items():
-        vals = [to_interval(raw[f"q{n}"]) for n in items]
+        vals = []
+        for n in items:
+            v_raw = raw[f"q{n}"]
+            v_pos = orient_pos(v_raw, n)
+            val = to_interval(v_pos)
+            vals.append(val)
         m = sum(vals) / len(vals)
         means[scale] = m
         grades[scale] = grade(m, *BENCH[scale])
@@ -58,7 +74,7 @@ st.title("User Experience Questionnaire")
 
 st.markdown(
     """
-This questionnaire helps us evaluate your experience with the platform. For each item, please select a point on the scale that best represents your impression.
+This questionnaire evaluates your experience with the AI learning assistant and platform. For each item, select the point on the scale that best represents your impression.
 
 Please decide spontaneously. Don't think too long about your decision to make sure that you convey your original impression.
 
@@ -162,19 +178,11 @@ for q in questions:
 
 # Submit button
 if st.button("Submit Responses"):
-    # list any questions without a value
-    missing = [
-        str(q["number"])
-        for q in questions
-        if st.session_state.responses[f"q{q['number']}"]["value"] is None
-    ]
-
+    # Require all 26 answers before submit
+    missing = [i for i in range(1, 26+1) if f"q{i}" not in st.session_state.responses or st.session_state.responses[f"q{i}"]["value"] is None]
     if missing:
-        st.error(
-            "Please give a score (1 – 7) for every statement "
-            f"before sending the survey. Missing: {', '.join(missing)}"
-        )
-        st.stop()  # abort the rest of the submit logic
+        st.warning("Please answer all 26 UEQ items before submitting.")
+        st.stop()
 
     # --- all items answered: continue as before ---------------------
     st.success("Thank you for completing the User Experience Questionnaire!")
@@ -205,51 +213,86 @@ if st.button("Submit Responses"):
     session_manager = get_session_manager()
 
     bench = evaluate_ueq(answers_dict)
-
-    txt_path = session_manager.save_ueq(
-        answers=answers_dict,
-        benchmark=bench,
-        free_text=st.session_state.get("saved_comment"),  # ← not "extra_comment"
+    
+    # Save via session manager to JSON (not TXT)
+    payload = {
+        "answers": answers_dict,            # q1..q26 -> 1..7 (as selected)
+        "means": bench["means"],            # computed means per scale
+        "grades": bench["grades"],          # grade per scale
+    }
+    sm = get_session_manager()
+    sm.save_ueq(
+        answers=payload["answers"], 
+        benchmark={"means": payload["means"], "grades": payload["grades"]}, 
+        free_text=st.session_state.get("saved_comment")
     )
+    st.success("UEQ saved.")
 
     # Get the session info for display
     session_info = session_manager.get_session_info()
-    fake_name = session_info["fake_name"]
+    fake_name = session_info.get("fake_name", "unknown")
+    session_id = session_info.get("session_id", "unknown")
 
     st.success(f"Your responses have been saved with pseudonymized ID: {fake_name}")
+    st.caption(f"Session ID: {session_id}")
 
-st.markdown("#### Extra comment")
+# Determine language condition from session_manager
+session_info = session_manager.get_session_info()
+lang_code = session_info.get("language_code") or st.session_state.get("language_code", "en")
+is_english_condition = (lang_code == "en")
+
+st.markdown("#### Optional feedback (highly appreciated)")
+st.write(
+    "If you noticed anything unusual or important during the session, please write it here.\n\n"
+    "**Helpful topics include:**\n"
+    "- **Language quality:** Was the AI's language natural and correct? Any strange translations or mixed language?\n"
+    "- **Clarity:** Were explanations clear and easy to follow?\n"
+    "- **Trust/accuracy:** Any answers that seemed wrong, misleading, or overconfident?\n"
+    "- **Usability:** Any technical issues, slow responses, or confusing UI elements?\n"
+    "- **Anything else:** Any thought that could help us interpret your results."
+)
+
+if not is_english_condition:
+    st.info(
+        "**Comparison prompt (native-language condition):**\n"
+        "- Compared to how you normally use ChatGPT/Gemini, did this session feel **easier, harder, or about the same**? Why?\n"
+        "- Did using your native language change your confidence, speed, or understanding?"
+    )
+else:
+    st.info(
+        "**Optional reflection (English condition):**\n"
+        "If you have used AI tools before, did this session feel similar to your usual usage? What felt different?"
+    )
+
 # --- comment widget -----------------------------------------
 comment_txt = st.text_area(
-    "Anything else you would like to share?",
-    placeholder="Feel free to note technical issues, UI feedback, ideas, specific notes, etc.",
+    "Your feedback:",
+    placeholder="Write your feedback here...",
     key="extra_comment",
-    height=120,
+    height=150,
+    label_visibility="collapsed"
 )
 
 # --- save comment widget -----------------------------------
 if st.button("Save comment", key="save_extra_comment"):
-    if comment_txt.strip():
-        st.session_state["saved_comment"] = comment_txt.strip()
-        
-        # If UEQ has already been submitted, re-save it with the new comment
-        if "ueq_submitted" in st.session_state and st.session_state["ueq_submitted"]:
-            # Re-create the answers dict and benchmark
+    comment = (comment_txt or "").strip()
+    if comment:
+        st.session_state["saved_comment"] = comment
+        st.success("Your comment has been saved!")
+
+        # If UEQ already submitted, re-save JSON with comment included
+        if st.session_state.get("ueq_submitted", False):
             answers_dict = {
                 key: entry["value"]
                 for key, entry in st.session_state.responses.items()
                 if entry["value"] is not None
             }
             bench = evaluate_ueq(answers_dict)
-            
-            # Re-save UEQ with the new comment
-            txt_path = session_manager.save_ueq(
+            session_manager.save_ueq(
                 answers=answers_dict,
                 benchmark=bench,
-                free_text=st.session_state.get("saved_comment"),
+                free_text=comment,
             )
-            st.success("Your comment has been saved and added to your UEQ responses!")
-        else:
-            st.success("Your comment has been saved!")
+            st.success("Your comment has been added to your UEQ responses.")
     else:
         st.warning("Please enter a comment before saving.")

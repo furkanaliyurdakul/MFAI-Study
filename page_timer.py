@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-import time
+from time import perf_counter
 import json
 from pathlib import Path
 import streamlit as st
@@ -16,12 +16,12 @@ def start(page: str):
     prev_page  = data.get("current_page")
     if prev_start and prev_page:
         data["durations"][prev_page] = data["durations"].get(prev_page, 0) + (
-            time.time() - prev_start
+            perf_counter() - prev_start
         )
 
     # Start timer for the new page
     data["current_page"] = page
-    data["enter_ts"]     = time.time()
+    data["enter_ts"]     = perf_counter()
 
 def dump(session_dir: Path):
     """Write durations.json next to the other session artefacts."""
@@ -33,7 +33,7 @@ def dump(session_dir: Path):
     if data["enter_ts"]:
         data["durations"][data["current_page"]] = (
             data["durations"].get(data["current_page"], 0)
-            + time.time() - data["enter_ts"]
+            + perf_counter() - data["enter_ts"]
         )
         data["enter_ts"] = None
 
@@ -41,13 +41,13 @@ def dump(session_dir: Path):
     out = session_dir / "meta"
     out.mkdir(exist_ok=True)
     json_path = out / "page_durations.json"
-    json_path.write_text(json.dumps(data["durations"], indent=2))
+    # 3.2 Round durations to 1 decimal place
+    json_path.write_text(json.dumps({k: round(v, 1) for k, v in data["durations"].items()}, indent=2))
 
     return json_path
 
 
 # --- live snapshot --------------------------------------------------------
-import math  # std-lib | already imported? then skip
 
 def snapshot() -> dict[str, float]:
     """
@@ -63,7 +63,7 @@ def snapshot() -> dict[str, float]:
 
     # add the still-running page
     if data["enter_ts"]:
-        running = time.time() - data["enter_ts"]
+        running = perf_counter() - data["enter_ts"]
         out[data["current_page"]] = out.get(data["current_page"], 0) + running
 
     return out

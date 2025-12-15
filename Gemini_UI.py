@@ -22,6 +22,7 @@ import streamlit as st
 
 # ── local imports ──────────────────────────────────────────────────────────
 from config import config
+from constants import SLIDE_FILENAME_RE
 # import whisper  # Disabled - using pre-transcribed content
 # import win32com.client  # Disabled for Linux deployment
 
@@ -61,9 +62,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-label: str = (
-    "Personalised" if st.session_state.get("use_personalisation", True) else "Generic"
-)
+# All users get identical treatment - only language varies
 
 # ──────────────────────────────────────────────────────────────────────────
 # Session‑state helpers
@@ -90,16 +89,32 @@ def debug_log(msg: str) -> None:
 # Prompt builders
 # ──────────────────────────────────────────────────────────────────────────
 
-def make_base_context(profile: dict | None, personalised: bool) -> dict:
+def make_base_context(language_code: str = "en") -> dict:
     """
     Return the immutable context we want to feed Gemini **before every** exchange.
 
-    • The SYSTEM + Formatting rules are included for all runs.  
-    • The StudentProfile is only added when *personalised* is True.
+    • The SYSTEM + Formatting rules are included for all runs.
+    • Language enforcement ensures responses match the user's assigned language.
+    • NO student profile - all users get identical treatment.
     """
+    # Language-specific enforcement instructions
+    language_names = {
+        "en": "English",
+        "de": "German (Deutsch)",
+        "nl": "Dutch (Nederlands)",
+        "tr": "Turkish (Türkçe)",
+        "sq": "Albanian (Shqip)",
+        "hi": "Hindi (हिन्दी)"
+    }
+    
+    target_language = language_names.get(language_code, "English")
+    
     system_msg = (
-        "You are an adaptive teaching assistant. "
-        "Always answer in Markdown, never in JSON or wrapped in triple-backticks."
+        f"You are a teaching assistant for a Generative AI course. "
+        f"CRITICAL REQUIREMENT: You MUST respond ONLY in {target_language}. "
+        f"All explanations, answers, and interactions must be in {target_language}. "
+        f"Never use English or any other language in your responses unless the assigned language is English. "
+        f"Always answer in Markdown, never in JSON or wrapped in triple-backticks."
     )
 
     base = {
@@ -116,15 +131,10 @@ def make_base_context(profile: dict | None, personalised: bool) -> dict:
         },
     }
 
-    if personalised and profile:
-        base["StudentProfile"] = profile     # <- only in that condition
-
     return base
 
-def create_summary_prompt(profile: dict, slide: str, personalised: bool = True) -> str:
-    """Return the user‑facing summary prompt passed to Gemini."""
-    label_loc = "Personalised" if personalised else "Generic"
-
+def create_summary_prompt(slide: str) -> str:
+    """Return the user‑facing summary prompt for logging."""
     return (
         f"Generate an explanation for {slide}. "
     )
@@ -156,25 +166,37 @@ def create_summary_prompt(profile: dict, slide: str, personalised: bool = True) 
 """
 
 def create_structured_prompt(
-    slide_txt: str, transcript: str, profile: dict, slide: str
+    slide_txt: str, transcript: str, slide: str, language_code: str = "en"
 ) -> str:
-    """Gemini JSON prompt – rich variant that references the student profile."""
+    """Gemini JSON prompt – standardized explanation based on course content only."""
 
-    # ── new prompt ----------------------------------------------------- #
+    # Language-specific enforcement
+    language_names = {
+        "en": "English",
+        "de": "German (Deutsch)",
+        "nl": "Dutch (Nederlands)",
+        "tr": "Turkish (Türkçe)",
+        "sq": "Albanian (Shqip)",
+        "hi": "Hindi (हिन्दी)"
+    }
+    
+    target_language = language_names.get(language_code, "English")
+
+    # ── prompt ----------------------------------------------------- #
     system_msg = (
-        "You are an adaptive teaching assistant. Use the provided context, "
-        "and reply only in Markdown addressed to the student."
+        f"You are a teaching assistant for a Generative AI course. "
+        f"CRITICAL: Respond ONLY in {target_language}. "
+        f"Use the provided lecture content to explain concepts clearly."
     )
 
     prompt_dict = {
         # ── SYSTEM (high‑level reminders) ───────────────────────────────
         "System": system_msg,
 
-        # ── ROLE & OBJECTIVE ────────────────────────────────────────────
-        "Role": "Personalised Slide‑Tutor",
+        # ── ROLE & OBJECTIVE ────────────────────────────────────────
+        "Role": "Generative AI Tutor",
         "Objective": (
-            f"Explain *{slide}* in a way that is fitting **for "
-            f"{profile.get('Name','the student')}**."
+            f"Provide a clear, educational explanation of *{slide}* based on the lecture materials."
         ),
 
         # ── INSTRUCTIONS / RESPONSE RULES ───────────────────────────────
@@ -184,22 +206,16 @@ def create_structured_prompt(
                 "If you need to show a code snippet, use fenced code‑blocks "
                 "(```python` … ```). Write math inline as LaTeX ($x^2$)."
             ),
-            "Tone": "Friendly, concise, expert",
+            "Tone": "Friendly, clear, expert",
             "Guidelines": [
-                "Adjust language to the student’s proficiency",
-                "Explicitly tackle the student’s weakest subject",
-                "Link examples to the student’s major / hobbies",
-                "Reflect preferred learning strategies",
-                "Mention potential barriers & short‑term goals",
+                "Use clear, accessible language",
+                "Include relevant examples from the lecture",
+                "Explain key concepts thoroughly",
+                "Connect ideas to practical applications",
             ],
-            # optional agentic bits
-            "ToolUse": "No external tools available – rely on context below.",
         },
 
-        # ── STUDENT PROFILE (for grounding) ─────────────────────────────
-        "StudentProfile": profile,          # ← unchanged dictionary
-
-        # ── CONTEXT ─────────────────────────────────────────────────────
+        # ── CONTEXT ─────────────────────────────────────────────────
         "Context": {
             "Slides": {
                 "content": slide_txt,
@@ -329,30 +345,70 @@ def export_ppt_slides(ppt_path: Path) -> list[Path]:
 
 
 def build_prompt(
-    slide_txt: str, transcript: str, profile: dict, slide: str, personalised: bool
+    slide_txt: str, transcript: str, slide: str, language_code: str = "en"
 ) -> str:
-    """Return the JSON prompt string – personalised or generic."""
-    if personalised:
-        return create_structured_prompt(slide_txt, transcript, profile, slide)
+    """Return the JSON prompt string based on course content only."""
+    return create_structured_prompt(slide_txt, transcript, slide, language_code)
 
-    base = {
-        "System": (
-            "You are a teaching assistant. Reply in Markdown, never JSON."
-        ),
-        "Instructions": {
-            "Formatting": (
-                "Return Markdown only. Use fenced code-blocks for code and "
-                "write math inline as LaTeX ($x^2$)."
-            ),
-            "Tone": "Friendly, concise, expert"
-        },
-        "Context": {
-            "Slides": {"content": slide_txt},
-            "Transcript": {"content": transcript},
-        },
-        "Objective": f"Provide an educational explanation of {slide} based on the lecture content"
-    }
-    return json.dumps(base, indent=2)
+
+@st.cache_data(show_spinner=False)
+def _load_transcript_cached(transcript_path: str) -> str:
+    """Cached helper to load transcription text."""
+    from pathlib import Path
+    path = Path(transcript_path)
+    if path.exists():
+        return path.read_text(encoding="utf-8")
+    return ""
+
+
+@st.cache_data(show_spinner=False)
+def _load_slides_cached(slides_dir: str) -> list:
+    """Cached helper to load slide paths."""
+    from pathlib import Path
+    from constants import SLIDE_FILENAME_RE
+    dir_path = Path(slides_dir)
+    if dir_path.exists():
+        # Filter and sort slides with robust error handling
+        valid_slides = []
+        for p in dir_path.glob("Slide_*.png"):
+            match = SLIDE_FILENAME_RE.search(p.stem)
+            if match:
+                try:
+                    slide_num = int(match.group(1))
+                    valid_slides.append((slide_num, p))
+                except (ValueError, IndexError):
+                    continue
+        # Sort by slide number and return paths
+        valid_slides.sort(key=lambda x: x[0])
+        return [path for _, path in valid_slides]
+    return []
+
+
+def load_course_content() -> None:
+    """Load course slides and transcription from files.
+    
+    This loads the actual course materials that are the same for all users.
+    Profile is NOT loaded here - it's created fresh each session.
+    """
+    # Load all course slides (cached)
+    if not st.session_state.get("exported_images"):
+        slides_dir = ROOT / "uploads" / "ppt" / config.course.slides_directory
+        slide_files = _load_slides_cached(str(slides_dir))
+        if slide_files:
+            st.session_state.exported_images = slide_files
+            debug_log(f"Loaded {len(slide_files)} {config.course.course_title} slides")
+    
+    # Load course transcription (cached)
+    if not st.session_state.get("transcription_text"):
+        transcription_file = TRANSCRIPTION_DIR / config.course.transcription_filename
+        transcript = _load_transcript_cached(str(transcription_file))
+        if transcript:
+            st.session_state.transcription_text = transcript
+            debug_log(f"Loaded {config.course.course_title} transcription from {transcription_file.name}")
+    
+    # Set default slide selection
+    if not st.session_state.get("selected_slide"):
+        st.session_state.selected_slide = "Slide 1"
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -362,11 +418,14 @@ def build_prompt(
 
 def main() -> None:
     st.title(f"Explanation Generator - {config.course.course_title}")
+    
+    # Preview-only page notice
+    st.info("📝 Preview-only page: content loader & materials. The study chat runs in the main flow.")
 
     # 1) Fast‑test stub ---------------------------------------------------
     if FAST_TEST_MODE:
         st.session_state.exported_images = [
-            ROOT / "uploads" / "ppt" / "picture" / "Slide_1 of Lecture8.png"
+            ROOT / "uploads" / "ppt" / "picture" / "Slide_1 of What is Generative AI.png"
         ]
         st.session_state.transcription_text = (
             "This is a mock transcription for fast testing."
@@ -393,9 +452,12 @@ def main() -> None:
         # Production mode: Load course content automatically
         if not st.session_state.exported_images:
             # Load all course slides
-            cancer_slides_dir = ROOT / "uploads" / "ppt" / "fixed" / "picture"
-            if cancer_slides_dir.exists():
-                slide_files = sorted(cancer_slides_dir.glob("Slide_*.jpg"))
+            slides_dir = ROOT / "uploads" / "ppt" / config.course.slides_directory
+            if slides_dir.exists():
+                slide_files = sorted(
+                    slides_dir.glob("Slide_*.png"),
+                    key=lambda p: int(SLIDE_FILENAME_RE.search(p.stem).group(1))
+                )
                 st.session_state.exported_images = slide_files
                 debug_log(f"Loaded {len(slide_files)} {config.course.course_title} slides")
         
@@ -403,7 +465,7 @@ def main() -> None:
             # Load course transcription
             transcription_file = TRANSCRIPTION_DIR / config.course.transcription_filename
             if transcription_file.exists():
-                st.session_state.transcription_text = transcription_file.read_text(encoding="utf‑8")
+                st.session_state.transcription_text = transcription_file.read_text(encoding="utf-8")
                 debug_log(f"Loaded {config.course.course_title} transcription from {transcription_file.name}")
         
         # Profile is created fresh each session through the learning platform
@@ -417,7 +479,7 @@ def main() -> None:
         sm = get_session_manager()
         orig_profile = sm.profile_dir / "original_profile.txt"
         if orig_profile.exists():
-            prof_txt = orig_profile.read_text(encoding="utf‑8")
+            prof_txt = orig_profile.read_text(encoding="utf-8")
             st.session_state.profile_text = prof_txt
             st.session_state.profile_dict = parse_detailed_student_profile(prof_txt)
             debug_log(f"Loaded profile from {orig_profile}")

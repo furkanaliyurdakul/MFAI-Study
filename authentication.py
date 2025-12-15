@@ -19,9 +19,9 @@ class CredentialConfig:
     """Configuration for a specific credential type."""
     username: str
     password_hash: str
-    study_condition: str  # "personalised", "generic", "dev", "fast_test", "dev_fast_test"
+    language_code: str  # "en", "de", "nl", "tr", "sq", "hi"
     description: str
-    folder_prefix: str  # for organizing data in Supabase
+    folder_prefix: str  # for organizing data by language in Supabase
     dev_mode: bool = False
     fast_test_mode: bool = False
     upload_enabled: bool = False
@@ -41,35 +41,83 @@ class AuthenticationManager:
     def _initialize_credentials(self) -> Dict[str, CredentialConfig]:
         """Initialize available credentials for the platform."""
         return {
-            # Personalised cohort participant
-            "personalised": CredentialConfig(
-                username="participant1",
-                password_hash=self._hash_password("password1"),
-                study_condition="personalised",
-                description="Personalised Learning Participant",
-                folder_prefix="personalised_cohort",
+            # English (High-resource control)
+            "english": CredentialConfig(
+                username="english_learner",
+                password_hash=self._hash_password("EnglishStudy2025!"),
+                language_code="en",
+                description="English Language Participant",
+                folder_prefix="english_cohort",
                 dev_mode=False,
                 fast_test_mode=False,
                 upload_enabled=False
             ),
             
-            # Generic cohort participant  
-            "generic": CredentialConfig(
-                username="participant2",
-                password_hash=self._hash_password("password2"),
-                study_condition="generic",
-                description="Generic Learning Participant",
-                folder_prefix="generic_cohort",
+            # German (High-resource European)
+            "german": CredentialConfig(
+                username="german_learner",
+                password_hash=self._hash_password("GermanStudy2025!"),
+                language_code="de",
+                description="German Language Participant",
+                folder_prefix="german_cohort",
                 dev_mode=False,
                 fast_test_mode=False,
                 upload_enabled=False
             ),
             
-            # Development mode - full access
+            # Dutch (High-resource European alternative)
+            "dutch": CredentialConfig(
+                username="dutch_learner",
+                password_hash=self._hash_password("DutchStudy2025!"),
+                language_code="nl",
+                description="Dutch Language Participant",
+                folder_prefix="dutch_cohort",
+                dev_mode=False,
+                fast_test_mode=False,
+                upload_enabled=False
+            ),
+            
+            # Turkish (Medium-resource)
+            "turkish": CredentialConfig(
+                username="turkish_learner",
+                password_hash=self._hash_password("TurkishStudy2025!"),
+                language_code="tr",
+                description="Turkish Language Participant",
+                folder_prefix="turkish_cohort",
+                dev_mode=False,
+                fast_test_mode=False,
+                upload_enabled=False
+            ),
+            
+            # Albanian (Low-resource)
+            "albanian": CredentialConfig(
+                username="albanian_learner",
+                password_hash=self._hash_password("AlbanianStudy2025!"),
+                language_code="sq",
+                description="Albanian Language Participant",
+                folder_prefix="albanian_cohort",
+                dev_mode=False,
+                fast_test_mode=False,
+                upload_enabled=False
+            ),
+            
+            # Hindi (Medium-resource, optional)
+            "hindi": CredentialConfig(
+                username="hindi_learner",
+                password_hash=self._hash_password("HindiStudy2025!"),
+                language_code="hi",
+                description="Hindi Language Participant",
+                folder_prefix="hindi_cohort",
+                dev_mode=False,
+                fast_test_mode=False,
+                upload_enabled=False
+            ),
+            
+            # Development mode - full access (defaults to English)
             "dev": CredentialConfig(
                 username="dev",
                 password_hash=self._hash_password("dev"),
-                study_condition="personalised",  # Default for dev mode
+                language_code="en",  # Default to English for dev
                 description="Development Mode - Full Access",
                 folder_prefix="dev_testing",
                 dev_mode=True,
@@ -77,11 +125,11 @@ class AuthenticationManager:
                 upload_enabled=True
             ),
             
-            # Fast test mode - quick tutorial
+            # Fast test mode - quick tutorial (defaults to English)
             "fasttest": CredentialConfig(
                 username="fasttest",
                 password_hash=self._hash_password("fasttest"),
-                study_condition="personalised",  # Default for demo
+                language_code="en",  # Default to English for demo
                 description="Fast Test Mode - Quick Tutorial",
                 folder_prefix="demo_testing",
                 dev_mode=False,
@@ -93,7 +141,7 @@ class AuthenticationManager:
             "devfast": CredentialConfig(
                 username="devfast",
                 password_hash=self._hash_password("devfast"),
-                study_condition="personalised",  # Default for combined mode
+                language_code="en",  # Default to English for combined mode
                 description="Development + Fast Test Mode",
                 folder_prefix="dev_fast_testing",
                 dev_mode=True,
@@ -153,12 +201,13 @@ class AuthenticationManager:
         session_keys_to_clear = [
             "current_page", "profile_completed", "learning_completed", 
             "test_completed", "ueq_completed", "completion_processed",
-            "upload_completed", "responses", "messages", "profile_text", 
-            "profile_dict", "exported_images", "transcription_text",
-            "selected_slide", "debug_logs", "condition_chosen",
-            "use_personalisation", "consent_given", "consent_logged",
+            "upload_completed", "responses", "messages", 
+            "exported_images", "transcription_text",
+            "selected_slide", "debug_logs", "language_code",
+            "consent_given", "consent_logged",
             "show_review", "gemini_chat", "_page_timer", "session_initialized",
-            "transcription_loaded", "slides_loaded", "gemini_chat_initialized"
+            "transcription_loaded", "slides_loaded", "gemini_chat_initialized",
+            "capacity_checked", "interview_access_granted", "session_registered"  # Clear capacity and registration flags
         ]
         
         for key in session_keys_to_clear:
@@ -173,27 +222,22 @@ class AuthenticationManager:
         st.session_state["test_completed"] = False
         st.session_state["ueq_completed"] = False
     
-    def get_study_condition_override(self) -> Optional[bool]:
-        """Get study condition override for special modes.
+    def get_language_code(self) -> Optional[str]:
+        """Get language code from current authenticated credential.
         
         Returns:
-            True for personalised, False for generic, None for user choice
+            Language code (e.g., 'en', 'de', 'tr') or None if not authenticated
         """
         config = self.get_current_config()
         if not config:
             return None
-            
-        # For dev modes, allow dynamic choice via sidebar
-        if config.dev_mode:
-            return st.sidebar.selectbox(
-                "🔧 Study Condition (Dev Mode)",
-                options=[True, False],
-                format_func=lambda x: "Personalised" if x else "Generic",
-                key="dev_condition_override"
-            )
         
-        # For participant credentials, use fixed condition
-        return config.study_condition == "personalised"
+        # Check if language was set in session state (e.g., by dev mode selector)
+        if "language_code" in st.session_state:
+            return st.session_state["language_code"]
+        
+        # Otherwise use credential's default language
+        return config.language_code
     
     def get_available_usernames(self) -> Dict[str, str]:
         """Get list of available usernames for display purposes."""

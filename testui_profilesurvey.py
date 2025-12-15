@@ -2,601 +2,466 @@ import streamlit as st
 
 FAST_TEST_MODE = st.session_state.get("fast_test_mode")
 
-st.title("Student Profile Survey")
+# Get current language from session state
+current_language = st.session_state.get("language_code", "en")
 
-# Initialize session state for form submission and to store form values
+# Language names dictionary
+language_names = {
+    "en": "English",
+    "de": "German",
+    "nl": "Dutch",
+    "tr": "Turkish",
+    "sq": "Albanian",
+    "hi": "Hindi"
+}
+
+# Initialize session state for form submission
 if "show_review" not in st.session_state:
     st.session_state.show_review = False
 
-
-# Initialize form values in session state to prevent losing data on rerun
+# Function to initialize form fields
 def init_form_field(key, default=None):
     if key not in st.session_state:
         st.session_state[key] = default
-    elif st.session_state[key] is None and default is not None:
-        st.session_state[key] = default
 
+# Helper functions to map labels to numeric codes for analysis
+def likert_5_to_int(label: str) -> int:
+    """Map 5-point Likert scale labels to integers 1-5"""
+    mapping = {
+        "1 - Strongly Disagree": 1,
+        "2 - Disagree": 2,
+        "3 - Neutral": 3,
+        "4 - Agree": 4,
+        "5 - Strongly Agree": 5,
+    }
+    return mapping.get(label, None)
 
-# Function to get value from session state
-def get_state_value(key, default=None):
-    return st.session_state.get(key, default)
+def familiarity_to_int(label: str) -> int:
+    """Map familiarity labels to integers 1-5"""
+    mapping = {
+        "1 - Not at all familiar": 1,
+        "2 - Slightly familiar": 2,
+        "3 - Moderately familiar": 3,
+        "4 - Familiar": 4,
+        "5 - Very familiar": 5,
+    }
+    return mapping.get(label, None)
 
+def usage_to_int(label: str) -> int:
+    """Map usage frequency labels to integers 0-3"""
+    mapping = {
+        "Never": 0,
+        "Yes, once or rarely": 1,
+        "Yes, occasionally": 2,
+        "Yes, frequently": 3,
+    }
+    return mapping.get(label, None)
 
-# Function to reset form state
-def reset_form_state():
-    for key in list(st.session_state.keys()):
-        if key != "show_review":
-            del st.session_state[key]
-    st.rerun()
+#  ═══════════════════════════════════════════════════════════════════
+#  MAIN CONTENT - Either show form OR show review (never both)
+#  ═══════════════════════════════════════════════════════════════════
 
+if not st.session_state.show_review:
+    # ───────────────────────────────────────────────────────────────
+    # FORM MODE - Display the survey questions
+    # ───────────────────────────────────────────────────────────────
+    
+    st.title("Participant Profile Survey")
+    st.caption(
+        "This survey collects background variables (language skills, prior AI knowledge, "
+        "and demographics) used only for analysis of learning outcomes. The AI assistant "
+        "provides the same learning content to all participants in your assigned language."
+    )
 
-# Function to initialize all form fields
-def init_all_form_fields():
-    # Basic fields
-    init_form_field("name")
-    init_form_field("age")
+    # Initialize all form fields (skip widgets with proper defaults)
+    init_form_field("genai_familiarity")
+    init_form_field("genai_usage")
+    init_form_field("genai_knowledge")
+    init_form_field("formal_ai_training")
+    init_form_field("gender")
     init_form_field("education_level")
-    init_form_field("major")
-    init_form_field("work_exp")
-    init_form_field("hobbies")
-    init_form_field("strongest_subject")
-    init_form_field("challenging_subject")
-    init_form_field("proficiency_level")
+    init_form_field("field_of_study")
+    init_form_field("learning_language_preference")
+    init_form_field("topic_interest")
+    init_form_field("llm_language_usage")
+    init_form_field("llm_usage_frequency")
 
-    # Subject ratings
-    for subject in subjects:
-        init_form_field(subject)
+    st.header("Section 1: Language Proficiency")
 
-    # Learning priorities
-    for priority in learning_priorities:
-        init_form_field(priority)
-
-    # Learning strategies
-    for strategy in learning_strategies:
-        init_form_field(strategy, False)
-
-    # Goals and barriers
-    for goal in short_term_goals:
-        init_form_field(f"short_{goal}", False)
-    for goal in long_term_goals:
-        init_form_field(f"long_{goal}", False)
-    for barrier in barriers:
-        init_form_field(f"barrier_{barrier}", False)
-
-
-# Define all the lists needed for form fields
-subjects = [
-    "Mathematics",
-    "Language Arts (reading, writing, speaking, listening, critical thinking)",
-    "English ",
-    "Science (Biology, Chemistry, Physics)",
-    "Social Studies (History, Politics, Geography, Economics)",
-    "Business & Finance",
-    "Computer Science/Programming",
-    "Engineering/Technology",
-    "Health & Medicine",
-    "Arts & Music",
-    "Foreign Languages",
-]
-
-learning_priorities = [
-    "Mastering relevant formulas and equations",
-    "Understanding interrelationships among various concepts",
-    "Grasping core concepts and key techniques",
-    "Applying theory to real-world problems",
-    "Critically analyzing and evaluating information",
-]
-
-learning_strategies = [
-    "Real-world case studies with practical examples",
-    "Interactive problem-solving exercises and guided project-based tasks",
-    "Simulated group discussions and collaborative Q&A",
-    "Detailed, step-by-step explanations similar to in-depth lectures",
-    "Concise summaries and comprehensive textbook reviews",
-    "Adaptive quizzes or exams",
-]
-
-short_term_goals = [
-    "Improve foundational skills and core concepts",
-    "Achieve higher grades or exam performance",
-    "Develop better problem-solving or analytical abilities",
-    "Gain new knowledge in specific areas",
-]
-
-long_term_goals = [
-    "Gain admission to a top university or specialized program",
-    "Advance my career or professional skills in this field",
-    "Pursue personal development and lifelong learning",
-    "Engage in research, innovation, or entrepreneurship",
-]
-
-barriers = [
-    "Limited time or scheduling conflicts",
-    "Difficulty understanding key concepts",
-    "Lack of quality resources or guidance",
-    "Emotional or motivational challenges",
-    "Insufficient foundational skills in mathematics",
-]
-
-# Initialize all form fields at startup
-init_all_form_fields()
-
-st.header("Section 1: Academic and Background Information")
-
-# Initialize form fields
-init_form_field("name")
-init_form_field("age")
-init_form_field("education_level")
-init_form_field("major")
-init_form_field("work_exp")
-init_form_field("hobbies")
-init_form_field("strongest_subject")
-init_form_field("challenging_subject")
-init_form_field("proficiency_level")
-
-# Question 1 - Open-ended
-name = st.text_input(
-    "1. What is your name? *",
-    key="name",
-    help="Write the name you would like us to use during the interview.",
-)
-
-# Question 2 - Open-ended
-age = st.text_input(
-    "2. What is your age? *", key="age", help="Whole years only, e.g. 22."
-)
-
-# Question 3 - Multiple-choice
-education_level = st.radio(
-    "3. Which of the following best describes your study background? *",
-    [
-        "Junior High School",
-        "High School",
-        "Undergraduate (Bachelor's)",
-        "Graduate (Master's)",
-        "Doctorate (Ph.D.)",
-        "Other",
-    ],
-    index=None,
-    key="education_level",
-    help="Pick the highest level you have finished so far.",
-)
-
-# Question 4 - Open-ended
-major = st.text_input(
-    "4. What was your major or primary area of study in your previous education? *",
-    key="major",
-    help="Main field of study; one line is enough.",
-)
-
-# Question 5 - Multiple-choice
-work_exp = st.radio(
-    "5. Do you have any work experience? If yes, what is your current job level? *",
-    [
-        "No work experience",
-        "Entry-level",
-        "Mid-level",
-        "Senior-level",
-        "Executive/Leadership",
-        "Other",
-    ],
-    index=None,
-    key="work_exp",
-    help="Choose the option that best matches your current or most recent role.",
-)
-
-# Question 6 - Open-ended
-hobbies = st.text_area(
-    "6. What are your hobbies or interests (please specify)? *",
-    key="hobbies",
-    help="Short list separated by commas, e.g. chess, hiking.",
-)
-
-# Question 7 - Rating (1-5)
-st.markdown(
-    "### 7. Assign a score from 1 to 5 to each subject, where 1 = Weakest and 5 = Strongest *"
-)
-
-subjects = [
-    "Mathematics",
-    "Language Arts (reading, writing, speaking, listening, critical thinking)",
-    "English ",
-    "Science (Biology, Chemistry, Physics)",
-    "Social Studies (History, Politics, Geography, Economics)",
-    "Business & Finance",
-    "Computer Science/Programming",
-    "Engineering/Technology",
-    "Health & Medicine",
-    "Arts & Music",
-    "Foreign Languages",
-]
-
-ratings = {}
-rating_options = [1, 2, 3, 4, 5]
-
-for subject in subjects:
-    # Initialize rating in session state if not already present
-    init_form_field(subject)
-    ratings[subject] = st.radio(
-        subject,
-        rating_options,
-        horizontal=True,
-        key=subject,
-        index=None,
-        help="1 = weakest, 5 = strongest. Select one score for each subject.",
+    # Q1 - Native language (pre-filled from credentials)
+    st.text_input(
+        "Q1. What is your native language?",
+        value=language_names.get(current_language, "English"),
+        disabled=True,
+        key="native_language_display",
+        help="Your assigned study language was set during enrollment and determines your experimental condition. This cannot be changed as we are researching how different languages affect learning with AI assistants. If you believe this is incorrect, please inform the research team."
     )
 
-# Questions 8 and 9 - Open-ended
-strongest_subject = st.text_input(
-    "8. Which subject or area do you consider your strongest? *",
-    key="strongest_subject",
-    help="Type the subject you feel most confident in.",
-)
-challenging_subject = st.text_input(
-    "9. Which subject or area do you find most challenging? *",
-    key="challenging_subject",
-    help="Type the subject you find hardest.",
-)
-
-st.markdown("---")
-st.header("Section 2: Learning Style Preferred Learning Methods and Assessment")
-
-# Question 10 - Rating (1-5)
-st.markdown(
-    "### 10. Assign a score from 1 to 5 to each of the following learning priorities based on their importance to you *"
-)
-st.markdown("(1 = least important, 5 = most important)")
-
-learning_priorities = [
-    "Mastering relevant formulas and equations",
-    "Understanding interrelationships among various concepts",
-    "Grasping core concepts and key techniques",
-    "Applying theory to real-world problems",
-    "Critically analyzing and evaluating information",
-]
-
-priority_ratings = {}
-
-for priority in learning_priorities:
-    # Initialize priority rating in session state if not already present
-    init_form_field(priority)
-    priority_ratings[priority] = st.radio(
-        priority,
-        rating_options,
-        horizontal=True,
-        key=priority,
-        index=None,
-        help="1 = least important to you, 5 = most important.",
+    # Q2 - English proficiency
+    english_proficiency = st.select_slider(
+        "Q2. How would you rate your proficiency in English? *",
+        options=[1, 2, 3, 4, 5, 6, 7],
+        value=4,
+        format_func=lambda x: {
+            1: "1 - Basic",
+            2: "2 - Elementary",
+            3: "3 - Intermediate",
+            4: "4 - Upper-Intermediate",
+            5: "5 - Advanced",
+            6: "6 - Proficient",
+            7: "7 - Native-like"
+        }.get(x, str(x)),
+        key="english_proficiency",
+        help="Rate your English language ability on a scale from 1 (Basic) to 7 (Native-like)"
     )
 
-# Question 11 - Multiple selection
-st.markdown(
-    "### 11. Which learning strategy would you prefer if you had access to a tutor? *"
-)
-st.markdown("(Select one or more)")
+    # Q3 - Native language proficiency
+    native_proficiency = st.select_slider(
+        f"Q3. How would you rate your proficiency in {language_names.get(current_language, 'your native language')}? *",
+        options=[1, 2, 3, 4, 5, 6, 7],
+        value=7,
+        format_func=lambda x: {
+            1: "1 - Basic",
+            2: "2 - Elementary",
+            3: "3 - Intermediate",
+            4: "4 - Upper-Intermediate",
+            5: "5 - Advanced",
+            6: "6 - Proficient",
+            7: "7 - Native-like"
+        }.get(x, str(x)),
+        key="native_proficiency",
+        help="Rate your native language ability on the same scale"
+    )
 
-learning_strategies = [
-    "Real-world case studies with practical examples",
-    "Interactive problem-solving exercises and guided project-based tasks",
-    "Simulated group discussions and collaborative Q&A",
-    "Detailed, step-by-step explanations similar to in-depth lectures",
-    "Concise summaries and comprehensive textbook reviews",
-    "Adaptive quizzes or exams",
-]
+    st.markdown("---")
+    st.header("Section 2: Prior Knowledge of Generative AI")
 
-selected_strategies = []
-for strategy in learning_strategies:
-    # Initialize strategy in session state if not already present
-    init_form_field(strategy, False)
-    if st.checkbox(strategy, key=strategy, help="Select at least one option"):
-        selected_strategies.append(strategy)
+    # Q4 - Familiarity with GenAI tools
+    genai_familiarity = st.radio(
+        "Q4. How familiar are you with generative AI tools (e.g., ChatGPT, DALL-E)? *",
+        [
+            "1 - Not at all familiar",
+            "2 - Slightly familiar",
+            "3 - Moderately familiar",
+            "4 - Familiar",
+            "5 - Very familiar"
+        ],
+        index=None,
+        key="genai_familiarity",
+        help="Rate your general awareness and exposure to generative AI tools"
+    )
 
-st.markdown("---")
-st.header("Section 3: Subject-Specific Proficiency, Goals, and Barriers")
-st.markdown("### 12. What is your current proficiency level in this subject? *")
-# Question 12 - Multiple-choice
-proficiency_level = st.radio(
-    "Select one",
-    [
-        "Beginner (I am new to this subject)",
-        "Intermediate (I have a basic understanding but need improvement)",
-        "Advanced (I have a strong grasp of the subject)",
-        "Other",
-    ],
-    index=None,
-    key="proficiency_level",
-    help="Estimate how well you know this course topic right now.",
-)
+    # Q5 - Usage frequency
+    genai_usage = st.radio(
+        "Q5. Have you used any generative AI tools before this study? *",
+        [
+            "Never",
+            "Yes, once or rarely",
+            "Yes, occasionally",
+            "Yes, frequently"
+        ],
+        index=None,
+        key="genai_usage",
+        help="How often have you actually used tools like ChatGPT?"
+    )
 
-# Question 13 - Multiple selection
-st.markdown("### 13. What are your short-term academic goals for this subject? *")
-st.markdown("(Select one or more)")
+    # Q6 - Self-assessed knowledge
+    genai_knowledge = st.radio(
+        "Q6. \"I know a lot about generative AI (how it works and its concepts).\" *",
+        [
+            "1 - Strongly Disagree",
+            "2 - Disagree",
+            "3 - Neutral",
+            "4 - Agree",
+            "5 - Strongly Agree"
+        ],
+        index=None,
+        key="genai_knowledge",
+        help="Rate your agreement with this statement about your prior knowledge"
+    )
 
-short_term_goals = [
-    "Improve foundational skills and core concepts",
-    "Achieve higher grades or exam performance",
-    "Develop better problem-solving or analytical abilities",
-    "Gain new knowledge in specific areas",
-]
+    # Q7 - Formal training
+    formal_ai_training = st.radio(
+        "Q7. Have you ever taken a course or formal training in artificial intelligence or machine learning? *",
+        ["Yes", "No"],
+        index=None,
+        key="formal_ai_training",
+        help="This includes university courses, online courses, or professional training"
+    )
 
-selected_short_goals = []
-for goal in short_term_goals:
-    # Initialize checkbox in session state if not already present
-    init_form_field(f"short_{goal}", False)
-    if st.checkbox(goal, key=f"short_{goal}", help="Select at least one option"):
-        selected_short_goals.append(goal)
+    st.markdown("---")
+    st.header("Section 3: Demographics and Background")
 
-# Question 14 - Multiple selection
-st.markdown(
-    "### 14. What are your long-term academic or career goals related to this subject? *"
-)
-st.markdown("(Select one or more)")
+    # Q8 - Age
+    age = st.number_input(
+        "Q8. What is your age (in years)? *",
+        min_value=16,
+        max_value=100,
+        value=20,
+        step=1,
+        key="age",
+        help="Enter your age in years"
+    )
 
-long_term_goals = [
-    "Gain admission to a top university or specialized program",
-    "Advance my career or professional skills in this field",
-    "Pursue personal development and lifelong learning",
-    "Engage in research, innovation, or entrepreneurship",
-]
+    # Q9 - Gender
+    gender = st.radio(
+        "Q9. What is your gender? *",
+        ["Male", "Female", "Non-binary", "Prefer not to say"],
+        index=None,
+        key="gender"
+    )
 
-selected_long_goals = []
-for goal in long_term_goals:
-    # Initialize checkbox in session state if not already present
-    init_form_field(f"long_{goal}", False)
-    if st.checkbox(goal, key=f"long_{goal}", help="Select at least one option"):
-        selected_long_goals.append(goal)
+    # Q10 - Education level
+    education_level = st.radio(
+        "Q10. What is your current level of education? *",
+        [
+            "Bachelor's degree",
+            "Master's degree",
+            "PhD",
+            "Other"
+        ],
+        index=None,
+        key="education_level",
+        help="Select your current degree level (completed or in progress)"
+    )
 
-# Question 15 - Multiple selection
-st.markdown(
-    "### 15. What potential barriers do you anticipate encountering while studying this subject? *"
-)
-st.markdown("(Select one or more)")
-
-barriers = [
-    "Limited time or scheduling conflicts",
-    "Difficulty understanding key concepts",
-    "Lack of quality resources or guidance",
-    "Emotional or motivational challenges",
-    "Insufficient foundational skills in mathematics",
-]
-
-selected_barriers = []
-for barrier in barriers:
-    # Initialize checkbox in session state if not already present
-    init_form_field(f"barrier_{barrier}", False)
-    if st.checkbox(
-        barrier, key=f"barrier_{barrier}", help="Select at least one option"
-    ):
-        selected_barriers.append(barrier)
-
-# Submit button
-submit_button = st.button("Submit", key="submit_profile_survey")
-if submit_button:
-    if "FAST_TEST_MODE" in globals() and FAST_TEST_MODE:
-        st.session_state.form_data = {
-            "name": "Test User",
-            "age": "21",
-            "education_level": "Undergraduate (Bachelor's)",
-            "major": "Engineering",
-            "work_exp": "Entry-level",
-            "hobbies": "Chess, Reading",
-            "strongest_subject": "Mathematics",
-            "challenging_subject": "Physics",
-            "ratings": {
-                "Mathematics": 5,
-                "Language Arts (reading, writing, speaking, listening, critical thinking)": 4,
-                "English ": 4,
-                "Science (Biology, Chemistry, Physics)": 3,
-                "Social Studies (History, Politics, Geography, Economics)": 3,
-                "Business & Finance": 2,
-                "Computer Science/Programming": 5,
-                "Engineering/Technology": 5,
-                "Health & Medicine": 2,
-                "Arts & Music": 3,
-                "Foreign Languages": 3,
-            },
-            "priority_ratings": {
-                "Mastering relevant formulas and equations": 5,
-                "Understanding interrelationships among various concepts": 5,
-                "Grasping core concepts and key techniques": 4,
-                "Applying theory to real-world problems": 5,
-                "Critically analyzing and evaluating information": 4,
-            },
-            "selected_strategies": [
-                "Detailed, step-by-step explanations similar to in-depth lectures"
-            ],
-            "proficiency_level": "Intermediate (I have a basic understanding but need improvement)",
-            "selected_short_goals": [
-                "Understand core concepts",
-                "Achieve higher grades or exam performance",
-            ],
-            "selected_long_goals": [
-                "Gain admission to a top university or specialized program"
-            ],
-            "selected_barriers": ["Lack of prior knowledge"],
-        }
-        st.session_state.show_review = True
-        st.success(
-            "FAST_TEST_MODE enabled: Synthetic profile used. Showing review section..."
+    # Conditional "Other" text input for education level
+    education_level_other = None
+    if education_level == "Other":
+        education_level_other = st.text_input(
+            "Please specify your education level:",
+            key="education_level_other",
+            help="E.g., High school, Professional certification, Trade school, etc."
         )
-    else:
-        try:
-            # Validate all inputs only when submit is clicked
+
+    # Q11 - Field of study
+    field_of_study = st.radio(
+        "Q11. What is your field of study or professional area? *",
+        [
+            "Computer Science/IT",
+            "Engineering (non-IT)",
+            "Natural Sciences (Physics, Chemistry, Biology, etc.)",
+            "Mathematics/Statistics",
+            "Business/Economics",
+            "Social Sciences (Psychology, Sociology, etc.)",
+            "Humanities (Languages, History, Philosophy, etc.)",
+            "Medicine/Health Sciences",
+            "Arts/Design",
+            "Education",
+            "Law",
+            "Other"
+        ],
+        index=None,
+        key="field_of_study"
+    )
+
+    # Conditional "Other" text input for field of study
+    field_of_study_other = None
+    if field_of_study == "Other":
+        field_of_study_other = st.text_input(
+            "Please specify your field:",
+            key="field_of_study_other",
+            help="Enter your field of study or professional area"
+        )
+
+    # Q12 - Learning language preference
+    learning_language_preference = st.radio(
+        "Q12. Do you generally prefer to learn new material in English or your native language? *",
+        [
+            "Primarily English",
+            "Both English and native language equally",
+            "Primarily native language"
+        ],
+        index=None,
+        key="learning_language_preference",
+        help="This helps us understand your language learning preferences"
+    )
+
+    # Q13 - Topic interest
+    topic_interest = st.radio(
+        "Q13. \"I am interested in learning about generative AI.\" *",
+        [
+            "1 - Strongly Disagree",
+            "2 - Disagree",
+            "3 - Neutral",
+            "4 - Agree",
+            "5 - Strongly Agree"
+        ],
+        index=None,
+        key="topic_interest",
+        help="Rate your interest in learning about generative AI"
+    )
+
+    # Q14 - LLM language usage
+    llm_language_usage = st.radio(
+        "Q14. When you use AI tools like ChatGPT or Gemini, which language do you primarily use? *",
+        [
+            "Primarily English",
+            "Both English and native language equally",
+            "Primarily native language"
+        ],
+        index=None,
+        key="llm_language_usage",
+        help="This helps us understand your prior experience with AI tools in different languages"
+    )
+
+    # Q15 - LLM usage frequency
+    llm_usage_frequency = st.radio(
+        "Q15. How often do you use AI tools like ChatGPT or Gemini? *",
+        [
+            "Daily",
+            "Weekly",
+            "Monthly",
+            "Rarely",
+            "Never"
+        ],
+        index=None,
+        key="llm_usage_frequency",
+        help="This helps us understand your experience level with AI assistants"
+    )
+
+    st.markdown("---")
+
+    # Submit button
+    submit_button = st.button("Submit Survey", key="submit_profile_survey", type="primary")
+
+    if submit_button:
+        if FAST_TEST_MODE:
+            # Fast test mode with synthetic data (both labels and numeric codes)
+            st.session_state.form_data = {
+                "native_language": language_names.get(current_language, "English"),
+                "english_proficiency": 5,
+                "native_proficiency": 7,
+                "genai_familiarity_label": "3 - Moderately familiar",
+                "genai_familiarity": 3,
+                "genai_usage_label": "Yes, occasionally",
+                "genai_usage": 2,
+                "genai_knowledge_label": "3 - Neutral",
+                "genai_knowledge": 3,
+                "formal_ai_training": "No",
+                "age": 24,
+                "gender": "Prefer not to say",
+                "education_level": "Master's degree",
+                "field_of_study": "Computer Science/IT",
+                "learning_language_preference": "Both equally / No strong preference",
+                "topic_interest_label": "4 - Agree",
+                "topic_interest": 4,
+                "llm_language_usage": "Both English and native language equally",
+                "llm_usage_frequency": "Weekly"
+            }
+            st.session_state.show_review = True
+            st.success("FAST_TEST_MODE: Synthetic profile created.")
+            st.rerun()
+        else:
+            # Validate all required fields
             all_fields_filled = (
-                name
-                and age
-                and education_level
-                and major
-                and work_exp
-                and hobbies
-                and strongest_subject
-                and challenging_subject
-                and all(rating is not None for rating in ratings.values())
-                and all(rating is not None for rating in priority_ratings.values())
-                and len(selected_strategies) > 0
-                and proficiency_level
-                and len(selected_short_goals) > 0
-                and len(selected_long_goals) > 0
-                and len(selected_barriers) > 0
+                english_proficiency is not None
+                and native_proficiency is not None
+                and genai_familiarity is not None
+                and genai_usage is not None
+                and genai_knowledge is not None
+                and formal_ai_training is not None
+                and age is not None
+                and gender is not None
+                and education_level is not None
+                and (education_level != "Other" or (education_level_other and education_level_other.strip()))
+                and field_of_study is not None
+                and (field_of_study != "Other" or (field_of_study_other and field_of_study_other.strip()))
+                and learning_language_preference is not None
+                and topic_interest is not None
+                and llm_language_usage is not None
+                and llm_usage_frequency is not None
             )
 
             if all_fields_filled:
-                # Store current form values in session state
+                # Store form data with both labels (for display) and numeric codes (for analysis)
                 st.session_state.form_data = {
-                    "name": name,
-                    "age": age,
+                    "native_language": language_names.get(current_language, "English"),
+                    "english_proficiency": int(english_proficiency),
+                    "native_proficiency": int(native_proficiency),
+                    "genai_familiarity_label": genai_familiarity,
+                    "genai_familiarity": familiarity_to_int(genai_familiarity),
+                    "genai_usage_label": genai_usage,
+                    "genai_usage": usage_to_int(genai_usage),
+                    "genai_knowledge_label": genai_knowledge,
+                    "genai_knowledge": likert_5_to_int(genai_knowledge),
+                    "formal_ai_training": formal_ai_training,
+                    "age": int(age),
+                    "gender": gender,
                     "education_level": education_level,
-                    "major": major,
-                    "work_exp": work_exp,
-                    "hobbies": hobbies,
-                    "strongest_subject": strongest_subject,
-                    "challenging_subject": challenging_subject,
-                    "ratings": ratings,
-                    "priority_ratings": priority_ratings,
-                    "selected_strategies": selected_strategies,
-                    "proficiency_level": proficiency_level,
-                    "selected_short_goals": selected_short_goals,
-                    "selected_long_goals": selected_long_goals,
-                    "selected_barriers": selected_barriers,
+                    "education_level_other": education_level_other if education_level_other else "",
+                    "field_of_study": field_of_study,
+                    "field_of_study_other": field_of_study_other if field_of_study_other else "",
+                    "learning_language_preference": learning_language_preference,
+                    "topic_interest_label": topic_interest,
+                    "topic_interest": likert_5_to_int(topic_interest),
+                    "llm_language_usage": llm_language_usage,
+                    "llm_usage_frequency": llm_usage_frequency
                 }
-                # Save profile data to a file
+                
+                # Save profile data to JSON
                 from session_manager import get_session_manager
-
-                # Get or create a session manager instance
                 session_manager = get_session_manager()
-
-                # Save the profile data with pseudonymization
-                original_name = name
+                
+                # save_profile now pseudonymizes internally, no need to pass name
                 file_path = session_manager.save_profile(
-                    st.session_state.form_data, original_name
+                    st.session_state.form_data,
+                    original_name=None
                 )
-
-                # Set the session state flag before any other operations
+                
                 st.session_state.show_review = True
-                # Add a success message to confirm the state change
-                st.success("Form submitted successfully! Showing review section...")
-
+                st.success("Survey submitted successfully!")
+                st.rerun()
             else:
-                st.warning(
-                    "Please fill in all required fields marked with * before submitting."
-                )
-                # For debugging
-                if not name:
-                    st.error("Name is required")
-                if not age:
-                    st.error("Age is required")
-                if not education_level:
-                    st.error("Education level is required")
-                if not major:
-                    st.error("Major is required")
-                if not work_exp:
-                    st.error("Work experience is required")
-                if not hobbies:
-                    st.error("Hobbies are required")
-                if not strongest_subject:
-                    st.error("Strongest subject is required")
-                if not challenging_subject:
-                    st.error("Challenging subject is required")
-                if not all(rating is not None for rating in ratings.values()):
-                    st.error("All subject ratings are required")
-                if not all(rating is not None for rating in priority_ratings.values()):
-                    st.error("All learning priority ratings are required")
-                if len(selected_strategies) == 0:
-                    st.error("At least one learning strategy is required")
-                if not proficiency_level:
-                    st.error("Proficiency level is required")
-                if len(selected_short_goals) == 0:
-                    st.error("At least one short-term goal is required")
-                if len(selected_long_goals) == 0:
-                    st.error("At least one long-term goal is required")
-                if len(selected_barriers) == 0:
-                    st.error("At least one potential barrier is required")
-            st.rerun()
-        except Exception as e:
-            st.error(f"An error occurred during form submission: {str(e)}")
-            import traceback
+                st.error("Please answer all required questions marked with * before submitting.")
 
-            st.error(traceback.format_exc())
+else:
+    # ───────────────────────────────────────────────────────────────
+    # REVIEW MODE - Display the submitted responses
+    # ───────────────────────────────────────────────────────────────
+    
+    st.title("Participant Profile Survey")
+    st.markdown("---")
+    st.header("Review Your Responses")
+    
+    form_data = st.session_state.get("form_data", {})
+    
+    if form_data:
+        response_text = f"""Participant Profile Survey Responses
+=====================================
 
+Section 1: Language Proficiency
+--------------------------------
+Q1. Native Language: {form_data.get('native_language', 'N/A')}
+Q2. English Proficiency: {form_data.get('english_proficiency', 'N/A')}/7
+Q3. Native Language Proficiency: {form_data.get('native_proficiency', 'N/A')}/7
 
-# Only show review section after submission
-if st.session_state.show_review:
-    try:
-        st.markdown("---")
-        st.header("Review Your Responses")
+Section 2: Prior Knowledge of Generative AI
+--------------------------------------------
+Q4. Familiarity with GenAI Tools: {form_data.get('genai_familiarity_label', 'N/A')} (coded: {form_data.get('genai_familiarity', 'N/A')})
+Q5. Previous Usage: {form_data.get('genai_usage_label', 'N/A')} (coded: {form_data.get('genai_usage', 'N/A')})
+Q6. Self-Assessed Knowledge: {form_data.get('genai_knowledge_label', 'N/A')} (coded: {form_data.get('genai_knowledge', 'N/A')})
+Q7. Formal AI Training: {form_data.get('formal_ai_training', 'N/A')}
 
-        # Access form data from session state
-        if "form_data" not in st.session_state:
-            st.error(
-                "Form data not found in session state. Please try submitting the form again."
-            )
-            st.session_state.show_review = False
-        else:
-            form_data = st.session_state.form_data
-
-            # Prepare the responses as text
-            response = f"""Student Profile Survey Responses:
-====================================
-
-Section 1: Academic and Background Information
-            ---------------------------------------------
-1. Name: {form_data['name']}
-2. Age: {form_data['age']}
-3. Study Background: {form_data['education_level']}
-4. Major/Area of Study: {form_data['major']}
-5. Work Experience: {form_data['work_exp']}
-6. Hobbies and Interests: {form_data['hobbies']}
-
-7. Subject Ratings:
+Section 3: Demographics and Background
+---------------------------------------
+Q8. Age: {form_data.get('age', 'N/A')}
+Q9. Gender: {form_data.get('gender', 'N/A')}
+Q10. Education Level: {form_data.get('education_level', 'N/A')}{f" ({form_data.get('education_level_other')})" if form_data.get('education_level_other') else ''}
+Q11. Field of Study: {form_data.get('field_of_study', 'N/A')}{f" ({form_data.get('field_of_study_other')})" if form_data.get('field_of_study_other') else ''}
+Q12. Learning Language Preference: {form_data.get('learning_language_preference', 'N/A')}
+Q13. Topic Interest: {form_data.get('topic_interest_label', 'N/A')} (coded: {form_data.get('topic_interest', 'N/A')})
+Q14. LLM Language Usage: {form_data.get('llm_language_usage', 'N/A')}
+Q15. LLM Usage Frequency: {form_data.get('llm_usage_frequency', 'N/A')}
 """
-
-            for subject, rating in form_data["ratings"].items():
-                response += f"   - {subject}: {rating}/5\n"
-
-            response += f"""
-8. Strongest Subject or Area: {form_data['strongest_subject']}
-9. Most Challenging Subject or Area: {form_data['challenging_subject']}
-
-Section 2: Learning Style Preferred Learning Methods and Assessment
------------------------------------------------------------------
-10. Learning Priorities (1 = least important, 5 = most important):
-"""
-
-            for priority, rating in form_data["priority_ratings"].items():
-                response += f"   - {priority}: {rating}/5\n"
-
-            response += "\n11. Preferred Learning Strategies:\n"
-            for strategy in form_data["selected_strategies"]:
-                response += f"   - {strategy}\n"
-
-            response += f"""
-
-Section 3: Subject-Specific Proficiency, Goals, and Barriers
-----------------------------------------------------------
-12. Current Proficiency Level: {form_data['proficiency_level']}
-
-13. Short-term Academic Goals:
-"""
-
-            for goal in form_data["selected_short_goals"]:
-                response += f"   - {goal}\n"
-
-            response += "\n14. Long-term Academic/Career Goals:\n"
-            for goal in form_data["selected_long_goals"]:
-                response += f"   - {goal}\n"
-
-            response += "\n15. Potential Barriers:\n"
-            for barrier in form_data["selected_barriers"]:
-                response += f"   - {barrier}\n"
-
-            st.text_area(
-                "Please review your responses below:", value=response, height=500
-            )
-
-    except Exception as e:
-        st.error(f"An error occurred in the review section: {str(e)}")
-        import traceback
-
-        st.error(traceback.format_exc())
-        # Reset the show_review state if there's an error
-        st.session_state.show_review = False
+        
+        st.text_area(
+            "Your responses:",
+            value=response_text,
+            height=400,
+            disabled=True
+        )
+        
+        st.info("Your responses have been saved. You may now proceed to the next section.")
+    else:
+        st.error("No form data found. Please submit the survey again.")

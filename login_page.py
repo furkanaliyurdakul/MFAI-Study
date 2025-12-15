@@ -68,15 +68,9 @@ def show_login_page() -> bool:
                         credential_config = auth_manager.authenticate(username, password)
                         
                         if credential_config:
-                            # Successful authentication
+                            # Successful authentication - mark authenticated first
                             st.session_state["authenticated"] = True
                             st.session_state["credential_config"] = credential_config
-                            
-                            # Set study condition based on credentials
-                            condition_override = auth_manager.get_study_condition_override()
-                            if condition_override is not None:
-                                st.session_state["use_personalisation"] = condition_override
-                                st.session_state["condition_chosen"] = True
                             
                             # Configure special modes
                             st.session_state["dev_mode"] = credential_config.dev_mode
@@ -91,7 +85,7 @@ def show_login_page() -> bool:
                             st.error("Invalid username or password. Please check your credentials and try again.")
                             
                             # Show minimal debug info for developers only
-                            if "auth_log" in st.session_state and st.session_state.auth_log:
+                            if st.session_state.get("dev_mode", False) and "auth_log" in st.session_state and st.session_state.auth_log:
                                 with st.expander("Authentication Log", expanded=False):
                                     for log_entry in st.session_state.auth_log[-5:]:  # Show last 5 entries
                                         st.text(log_entry)
@@ -144,21 +138,22 @@ def show_logout_interface() -> None:
     config = auth_manager.get_current_config()
     
     if config:
-        # Only show session info for non-participant users
-        if config.username not in ["participant1", "participant2"]:
-            st.sidebar.markdown("---")
-            st.sidebar.subheader("Session Info")
-            st.sidebar.info(f"**User:** {config.description}")
-            st.sidebar.info(f"**Mode:** {config.study_condition.title()}")
-            
-            if config.dev_mode:
-                st.sidebar.warning("Development Mode Active")
-            if config.fast_test_mode:
-                st.sidebar.info("Fast Test Mode Active")
+        # Dev mode sidebar info
+        if st.session_state.get("dev_mode", False) or getattr(config, "dev_mode", False):
+            with st.sidebar:
+                st.caption("DEV — session info")
+                st.json({
+                    "session_id": st.session_state.get("session_id"),
+                    "language": st.session_state.get("language_code"),
+                    "username": config.username,
+                })
+                if "auth_log" in st.session_state and st.session_state.auth_log:
+                    with st.expander("Authentication Log"):
+                        for entry in st.session_state.auth_log[-10:]:
+                            st.text(entry)
         
-        if st.sidebar.button("Logout", type="secondary"):
-            auth_manager.logout()
-            st.rerun()
+        # Session info will be shown in main.py after navigation
+        # (moved to keep UI clean and organized)
 
 
 def require_authentication() -> CredentialConfig:

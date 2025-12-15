@@ -15,17 +15,17 @@ class CourseConfig:
     """Configuration for the current course/study topic."""
     
     # Core course information
-    course_title: str = "Introduction to Cancer Biology"
-    course_short_name: str = "Cancer Biology"  # Used in shorter contexts
-    subject_area: str = "Biology"  # General subject area
+    course_title: str = "Introduction to Generative AI"
+    course_short_name: str = "Generative AI"  # Used in shorter contexts
+    subject_area: str = "Artificial Intelligence"  # General subject area
     
     # File and content references
-    transcription_filename: str = "turbo_transcription_Introduction to Cancer Biology.txt"
-    video_filename: str = "Introduction to Cancer Biology.mp4"
-    slides_directory: str = "fixed"  # Subdirectory in uploads/ppt/
+    transcription_filename: str = "turbo_transcription_What is Generative AI.txt"
+    video_filename: str = "What is Generative AI.mp4"
+    slides_directory: str = "picture"  # Subdirectory in uploads/ppt/
     
     # Study-specific settings
-    total_slides: int = 27  # Expected number of slides
+    total_slides: int = 15  # Expected number of slides
     session_duration_minutes: int = 60  # Expected session duration
 
 
@@ -34,17 +34,17 @@ class PlatformConfig:
     """Configuration for platform text and interface."""
     
     # Platform branding
-    platform_name: str = "AI Learning Platform"
-    platform_subtitle: str = "Personalized Learning Experience"
+    platform_name: str = "Multilingual AI Learning Platform"
+    platform_subtitle: str = "Fairness in AI Education Research"
     
     # Study information
-    study_title: str = "AI-Generated Personalized Learning Study"
-    study_organization: str = "KU Leuven"
+    study_title: str = "Language Effects on LLM-Assisted Learning Study"
+    study_organization: str = "FH Dortmund"
     study_year: str = "2025"
     
     # Interface labels
     learning_section_name: str = "Learning Experience"  # Used in navigation
-    explanation_generator_title: str = "Explanation Generator"
+    explanation_generator_title: str = "AI Learning Assistant"
     
     # Session components
     session_components: List[str] = None
@@ -68,10 +68,10 @@ class UITextConfig:
     welcome_subtitle: str = "Welcome – what this session is about"
     
     study_description: str = (
-        "You are taking part in our {study_organization} study on **AI‑generated, "
-        "personalized learning explanations**. We are studying whether tailoring "
-        "explanations to a learner's background affects their understanding of the "
-        "material compared to providing general explanations."
+        "You are taking part in our {study_organization} study on **fairness in AI-assisted learning**. "
+        "We are investigating how the language of instruction affects learning outcomes when using "
+        "large language models (LLMs) as study assistants. This research examines whether language "
+        "choice creates educational inequalities in AI-supported learning environments."
     )
     
     session_topic_intro: str = "In today's session, it will be about **{course_title}**."
@@ -81,7 +81,7 @@ class UITextConfig:
     nav_profile: str = "Student Profile Survey"
     nav_learning: str = "{learning_section_name}"
     nav_knowledge: str = "Knowledge Test"
-    nav_ueq: str = "User Experience Survey"
+    nav_ueq: str = "UEQ Survey"
     
     # Content status messages
     content_loaded_slides: str = "✅ {total_slides} slides loaded"
@@ -103,13 +103,14 @@ class UITextConfig:
     # Study role and data info
     your_role_text: str = (
         "* Work through the steps **in the order shown** (use the sidebar).\\n"
+        "* Interact with the AI assistant in your assigned language.\\n"
         "* Give honest answers – there are no right or wrong responses.\\n"
         "* **Ask questions any time** – just speak to the facilitator."
     )
     
     data_recording_text: str = (
-        "We log your inputs and the system's responses to analyse the tutor's effectiveness.\\n"
-        "Your name is replaced by a random code; you may stop at any moment without penalty."
+        "We log your interactions with the AI assistant to analyze learning effectiveness across languages.\\n"
+        "Your name is replaced by a pseudonymous code; you may stop at any moment without penalty."
     )
     
     # Completion and progress messages
@@ -147,6 +148,76 @@ class AuthConfig:
     logout_success_message: str = "Successfully logged out. Thank you for participating!"
 
 
+@dataclass
+class LanguageConfig:
+    """Configuration for supported languages in the study."""
+    
+    # Language definitions with ISO codes and display names
+    LANGUAGES: Dict[str, Dict[str, str]] = None
+    
+    def __post_init__(self):
+        if self.LANGUAGES is None:
+            self.LANGUAGES = {
+                "en": {
+                    "code": "en",
+                    "name": "English",
+                    "display_name": "English",
+                    "resource_level": "high",
+                    "description": "High-resource control language"
+                },
+                "de": {
+                    "code": "de", 
+                    "name": "German",
+                    "display_name": "Deutsch",
+                    "resource_level": "high",
+                    "description": "High-resource European language"
+                },
+                "nl": {
+                    "code": "nl",
+                    "name": "Dutch", 
+                    "display_name": "Nederlands",
+                    "resource_level": "high",
+                    "description": "High-resource European language"
+                },
+                "tr": {
+                    "code": "tr",
+                    "name": "Turkish",
+                    "display_name": "Türkçe",
+                    "resource_level": "medium",
+                    "description": "Medium-resource language"
+                },
+                "sq": {
+                    "code": "sq",
+                    "name": "Albanian",
+                    "display_name": "Shqip",
+                    "resource_level": "low",
+                    "description": "Low-resource language"
+                },
+                "hi": {
+                    "code": "hi",
+                    "name": "Hindi",
+                    "display_name": "हिन्दी",
+                    "resource_level": "medium",
+                    "description": "Medium-resource language (optional)"
+                }
+            }
+    
+    def get_language_name(self, code: str) -> str:
+        """Get display name for language code."""
+        return self.LANGUAGES.get(code, {}).get("display_name", code)
+    
+    def get_language_code(self, name: str) -> str:
+        """Get language code from name."""
+        for code, lang in self.LANGUAGES.items():
+            if lang["name"].lower() == name.lower():
+                return code
+        return "en"  # Default to English
+    
+    def is_valid_language(self, code: str) -> bool:
+        """Check if language code is supported."""
+        return code in self.LANGUAGES
+
+
 class Config:
     """Main configuration class that combines all config sections."""
     
@@ -155,6 +226,7 @@ class Config:
         self.platform = PlatformConfig() 
         self.ui_text = UITextConfig()
         self.auth = AuthConfig()
+        self.language = LanguageConfig()
         
         # Apply course configuration to platform settings
         self._apply_course_config()
@@ -238,31 +310,13 @@ def get_file_path(file_type: str) -> str:
     """Get file path by type."""
     return get_config().get_file_paths().get(file_type, "")
 
+def get_language_name(code: str) -> str:
+    """Get display name for language code."""
+    return get_config().language.get_language_name(code)
 
-# Example usage and easy course switching
-def switch_to_machine_learning():
-    """Example: Switch platform to Machine Learning course."""
-    config = get_config()
-    config.update_course(
-        course_title="Introduction to Machine Learning",
-        course_short_name="Machine Learning", 
-        subject_area="Computer Science",
-        transcription_filename="turbo_transcription_Introduction to Machine Learning.txt",
-        video_filename="Introduction to Machine Learning.mp4",
-        total_slides=30
-    )
-
-def switch_to_physics():
-    """Example: Switch platform to Physics course."""
-    config = get_config()
-    config.update_course(
-        course_title="Quantum Physics Fundamentals",
-        course_short_name="Quantum Physics",
-        subject_area="Physics", 
-        transcription_filename="turbo_transcription_Quantum Physics Fundamentals.txt",
-        video_filename="Quantum Physics Fundamentals.mp4",
-        total_slides=25
-    )
+def get_supported_languages() -> Dict[str, Dict[str, str]]:
+    """Get all supported languages."""
+    return get_config().language.LANGUAGES
 
 
 # Global configuration instance

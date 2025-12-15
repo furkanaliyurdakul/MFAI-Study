@@ -47,3 +47,6 @@ output/
 
 # Temporary files
 *.tmp
+# Large video files
+uploads/video/*.mp4
+uploads/video/*.m4a

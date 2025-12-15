@@ -1,7 +1,36 @@
-# Personalized Learning Platform
+# MFAI-Study: Multilingual Fairness in AI-Assisted Learning
 
-A self‑contained Streamlit app for our KU Leuven study on AI‑generated learning explanations.  
-All session data are stored pseudonymously so that results can be analysed without linking them to a real identity.
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Streamlit](https://img.shields.io/badge/streamlit-1.39.0-red.svg)](https://streamlit.io)
+[![License](https://img.shields.io/badge/license-Research-green.svg)](LICENSE)
+
+A research platform investigating **fairness across languages** in AI-powered learning environments. Built with Streamlit and Google Gemini 2.5 Flash for KU Leuven Master's thesis research.
+
+**Key Features:**
+- 🌍 6-language experimental conditions (en, de, nl, tr, sq, hi)
+- 🤖 Consistent AI model across all conditions (Gemini 2.5 Flash)
+- 📊 Comprehensive analytics and interaction logging
+- 🔒 GDPR-compliant pseudonymization
+- 📈 Real-time UEQ benchmarking and knowledge assessment
+
+## Study Design
+
+This platform investigates **fairness across languages** in AI-powered learning environments. Participants are randomly assigned to one of **6 language conditions**:
+- **English (en)** – Germanic, high-resource
+- **German (de)** – Germanic, high-resource
+- **Dutch (nl)** – Germanic, mid-resource
+- **Turkish (tr)** – Turkic, mid-resource
+- **Albanian (sq)** – Indo-European (Albanian branch), low-resource
+- **Hindi (hi)** – Indo-European (Indo-Aryan), high-resource
+
+The experimental manipulation is the **language of LLM responses** while course materials remain in English. All participants interact with the same GenAI tutor (Google Gemini 2.5 Flash) but receive explanations in their assigned language.
+
+### Reproducibility Note
+- **Model**: `gemini-2.5-flash` via Google GenAI SDK
+- **Temperature**: 0.2 (low variance for consistency)
+- **Top-p**: 0.95 (nucleus sampling)
+- **Model provider & version**: Stored in `meta/experiment_meta.json` for each session
+- **Content version**: Tracked in session metadata for longitudinal comparisons
 
 ---
 ## Directory structure
@@ -31,14 +60,38 @@ output/
 ## Key components
 | file | role |
 |------|------|
-| `main.py` | navigation, page timer, session wiring |
-| `Gemini_UI.py` | personalised/generic tutor UI & helpers |
-| `session_manager.py` | directory & pseudonym handling |
+| `main.py` | navigation, page timer, session wiring, language routing |
+| `Gemini_UI.py` | multilingual tutor UI & helpers (preview-only mode) |
+| `session_manager.py` | directory & pseudonym handling, analytics consolidation |
 | `personalized_learning_logger.py` | buffered file logger for tutor interactions |
 | `testui_profilesurvey.py` | student‑profile questionnaire |
-| `testui_knowledgetest.py` | 5‑item multiple‑choice quiz |
-| `testui_ueqsurvey.py` | 26‑item UEQ short form + benchmark |
-| `page_timer.py` | per‑page dwell‑time measurement |
+| `testui_knowledgetest.py` | 5‑item multiple‑choice quiz (Q5 partial credit) |
+| `testui_ueqsurvey.py` | 26‑item UEQ short form + benchmark (reverse-coded) |
+| `page_timer.py` | per‑page dwell‑time measurement (monotonic clock) |
+| `constants.py` | single source of truth for platform constants |
+| `authentication.py` | credential-based language assignment & dev mode |
+| `presence_tracker.py` | concurrent session limiting via Supabase |
+| `capacity_manager.py` | non-blocking wait UI for platform capacity |
+| `supabase_storage.py` | cloud backup for session data (PII-safe) |
+
+---
+## Language Assignment
+
+Language conditions are assigned via **authentication credentials** (not visible to participants).  
+Each credential maps to one of the 6 language codes (en, de, nl, tr, sq, hi).
+
+```python
+# authentication.py – credential configuration
+{"username": "pilot_en_01", "language_code": "en"}
+{"username": "pilot_de_01", "language_code": "de"}
+# ... etc for all 6 languages
+```
+
+The language is **locked at login** and stored in:
+1. `st.session_state["language_code"]` – runtime state
+2. `output/<session>/meta/experiment_meta.json` – permanent record
+
+**No UI toggle exists** to prevent participants from changing language mid-session.
 
 ---
 ## Selecting the study condition *(personalised vs generic)*
@@ -85,19 +138,91 @@ python analyze_research_data.py
 See **`ANALYTICS_DOCUMENTATION.md`** for complete details on the analytics system and research data structure.
 
 ---
-## Running the app
+## 🚀 Quick Start
+
+### Installation
 
 ```bash
-# (optional) create a fresh virtual environment
-python -m venv .venv && source .venv/bin/activate  # PowerShell: .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+# Clone repository
+git clone https://github.com/furkanaliyurdakul/MFAI-Study.git
+cd MFAI-Study
 
-# launch the Streamlit server
-streamlit run main.py
+# Create virtual environment
+python -m venv .venv
 
-# (optional) expose it externally
-ngrok http 8501     # copy the forwarded URL for your participants
+# Activate environment
+# Windows PowerShell:
+.venv\Scripts\Activate.ps1
+# Windows CMD:
+.venv\Scripts\activate.bat
+# Linux/Mac:
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements_fixed.txt
 ```
 
-All uploads and logs appear under **`output/`** immediately.  
-After the session you can zip that folder for further analysis.
+### Running Locally
+
+```bash
+# Launch the Streamlit server
+streamlit run main.py
+
+# App will open at http://localhost:8501
+```
+
+### External Access (Optional)
+
+```bash
+# Expose for remote participants using ngrok
+ngrok http 8501
+# Copy the forwarded URL for participants
+```
+
+## 📦 Data Output
+
+All session data appears under **`output/`** immediately during the session.  
+After data collection, zip the `output/` folder for analysis.
+
+## 📖 Additional Documentation
+
+- **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** – Production deployment instructions
+- **[ANALYTICS_DOCUMENTATION.md](ANALYTICS_DOCUMENTATION.md)** – Analytics schema and metrics
+- **[docs/](docs/)** – Technical documentation and guides
+
+## 🔒 Privacy & Ethics
+
+- **Pseudonymization:** Real names replaced with fake identifiers at collection
+- **GDPR Compliant:** Full participant information and consent process
+- **Ethics Approval:** KU Leuven Research Ethics Committee
+- **Data Security:** Local storage + optional encrypted cloud backup
+
+## 📧 Contact
+
+**Researcher:** Furkan Ali Yurdakul  
+**Affiliation:** KU Leuven / FH Dortmund  
+**Study:** Master's Thesis - Multilingual Fairness in AI-Assisted Learning
+
+For questions about the study or technical issues, please open an issue or contact the research team.
+
+## 📝 Citation
+
+If you use this platform or adapt it for your research:
+
+```bibtex
+@mastersthesis{yurdakul2025mfai,
+  author = {Yurdakul, Furkan Ali},
+  title = {Multilingual Fairness in AI-Assisted Learning: An Experimental Study},
+  school = {KU Leuven / FH Dortmund},
+  year = {2025},
+  type = {Master's Thesis}
+}
+```
+
+## ⚠️ Research Use Only
+
+This platform is designed specifically for academic research. The codebase includes comprehensive logging and analytics to support rigorous analysis of language fairness in AI-assisted learning.
+
+---
+
+**Built with:** Python 3.11+ | Streamlit 1.39.0 | Google Gemini 2.5 Flash | Supabase (optional)

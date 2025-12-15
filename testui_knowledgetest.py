@@ -3,98 +3,134 @@ import os
 
 import streamlit as st
 from config import config
+import page_timer
+
+# Start timing this page
+page_timer.start("knowledge_test")
 
 st.title(f"Knowledge Test - {config.course.course_title}")
 
 st.markdown(
-    f"""
-Welcome to the knowledge assessment on {config.course.subject_area.lower()} and genetics. This brief test is designed to evaluate your understanding of key concepts in cancer development, genetics, and cellular processes through multiple-choice questions.
+    """
+This assessment measures your knowledge of key concepts in Generative AI, including Large Language Models (LLMs), supervised learning, and AI applications, as covered in the lecture materials.
 
-The assessment consists of 5 questions that cover fundamental concepts in {config.course.subject_area.lower()} including BRCA mutations, cancer genetics analogies, epigenetic regulation, genomic instability, and cellular processes in malignancy. You'll receive immediate feedback on your performance.
+The assessment consists of 8 questions. Question 5 is a multiple-select question where you can choose more than one answer. You receive 0.25 points for each correct choice in Question 5 (maximum 1.0 point). All other questions are single-choice and worth 1 point each.
 
-Feel free to trust your intuition and apply the knowledge you've gained from the lecture materials. Your spontaneous responses often best reflect your true understanding of these important biological concepts.
+**Note:** This test is for research purposes only. Your score does not affect your participation. Please answer to the best of your ability, as your honest performance helps us compare learning outcomes across different language groups.
 
-At the end of the test, you'll be able to see your score and download your results for future reference. Remember, this is a learning opportunity to help you gauge your knowledge in {config.course.subject_area.lower()}.
+There is no time limit.
 
-Ready to begin? Let's explore your understanding together!
+Ready to begin?
 """
 )
 
 # Question 1 - Single choice radio button
 st.markdown(
-    "**1. A woman inherits one mutated BRCA1 allele. Which statement best explains why her risk of breast cancer is elevated but not certain?**"
+    "**1. Which of these is the best definition of 'Generative AI'?**"
 )
 q1_options = [
-    "Both alleles are already inactive from birth.",
-    "The remaining wild-type allele can still produce functional protein until a second mutation occurs.",
-    "BRCA1 is only important in embryonic cells, not in adult tissue.",
-    "Inherited mutations always guarantee cancer, regardless of environment.",
+    "Artificial intelligence systems that can map from an input A to an output B.",
+    "Any web-based application that generates text.",
+    "AI that can produce high-quality content, such as text, images, and audio.",
+    "A form of web search.",
 ]
 q1 = st.radio("Select one answer for question 1:", q1_options, key="knowledge_q1", index=None)
 
 # Question 2 - Single choice radio button
 st.markdown(
-    "**2. Which scenario best illustrates the \"gas and brakes\" analogy of cancer genetics?**"
+    "**2. Which of these is the most accurate description of a Large Language Model (LLM)?**"
 )
 q2_options = [
-    "A cell acquires an inactivating mutation in p53, leading to loss of cell cycle arrest after DNA damage.",
-    "A cell acquires an inactivating mutation in Ras, reducing MAPK pathway signaling.",
-    "A cell deletes genes controlling glycolysis, reducing its metabolic activity.",
-    "A cell undergoes benign variation in a noncoding intron sequence.",
+    "It generates text by finding a writing partner to work with you.",
+    "It generates text by using supervised learning to carry out web search.",
+    "It generates text by repeatedly predicting the next word.",
+    "It generates text by repeatedly predicting words in random order.",
 ]
 q2 = st.radio("Select one answer for question 2:", q2_options, key="knowledge_q2", index=None)
 
 # Question 3 - Single choice radio button
 st.markdown(
-    "**3. Why does epigenetic regulation play a critical role in explaining cellular diversity despite identical DNA sequences in different tissues?**"
+    "**3. True or False: Because an LLM has learned from many web pages on the internet, its answers are always more trustworthy than other sources on the internet.**"
 )
 q3_options = [
-    "Epigenetics modifies gene expression without altering DNA sequence, enabling cell-type-specific transcription programs.",
-    "Cells randomly delete DNA they do not need, creating diversity.",
-    "DNA sequence varies significantly between liver and skin cells.",
-    "Epigenetic changes occur only in cancer cells, not in normal tissues.",
+    "True",
+    "False",
 ]
 q3 = st.radio("Select one answer for question 3:", q3_options, key="knowledge_q3", index=None)
 
 # Question 4 - Single choice radio button
 st.markdown(
-    "**4. How does genomic instability accelerate tumor evolution?**"
+    "**4. Why do we call AI a general-purpose technology, similar to electricity or the internet?**"
 )
 q4_options = [
-    "It maintains identical DNA across all tumor cells, ensuring stability.",
-    "It introduces a higher rate of mutation, increasing the chance of acquiring oncogene activation and tumor suppressor loss.",
-    "It prevents mutations from being passed to daughter cells, stabilizing growth.",
-    "It reduces mutation frequency, protecting the genome from becoming oncogenic.",
+    "Because it is useful for many different tasks.",
+    "Because it can chat.",
+    "Because it includes both supervised learning and generative AI.",
+    "Because it can be accessed via the general web.",
 ]
 q4 = st.radio("Select one answer for question 4:", q4_options, key="knowledge_q4", index=None)
 
-# Question 5 - Single choice radio button
+# Question 5 - Multiple choice checkboxes
 st.markdown(
-    "**5. According to the lecture, which of the following is not one of the three major cellular processes that a cancer cell must overcome to become malignant?**"
+    "**5. Which of these tasks are good examples of what an LLM or other Generative AI system can do? Select all that apply. (Q5 score is out of 4 options.)**"
 )
-q5_options = [
-    "Regulation of proliferation",
-    "Regulation of apoptosis/cell survival",
-    "Regulation of cellular communication",
-    "Regulation of protein translation",
+q5_option_a = st.checkbox("Summarise a long article into a short paragraph.", key="knowledge_q5_a")
+q5_option_b = st.checkbox("Earn a university degree on behalf of a student.", key="knowledge_q5_b")
+q5_option_c = st.checkbox("Translate a paragraph from English into Turkish.", key="knowledge_q5_c")
+q5_option_d = st.checkbox("Proofread a text and suggest clearer wording.", key="knowledge_q5_d")
+
+# Question 6 - Single choice radio button
+st.markdown(
+    "**6. A hospital uses AI to look at X-ray images and label each one as 'healthy' or 'disease present'. According to the course, which AI tool does this mainly use?**"
+)
+q6_options = [
+    "Generative AI",
+    "Supervised learning",
+    "Unsupervised learning",
+    "Reinforcement learning",
 ]
-q5 = st.radio("Select one answer for question 5:", q5_options, key="knowledge_q5", index=None)
+q6 = st.radio("Select one answer for question 6:", q6_options, key="knowledge_q6", index=None)
+
+# Question 7 - Single choice radio button
+st.markdown(
+    "**7. You hear of a company using an LLM to automatically route incoming customer emails to the right department. Which of these use cases is it most likely to be?**"
+)
+q7_options = [
+    "Employees are copy-pasting the emails into a web interface to decide how to route them.",
+    "The company has a software-based application that uses an LLM to automatically route the emails.",
+]
+q7 = st.radio("Select one answer for question 7:", q7_options, key="knowledge_q7", index=None)
+
+# Question 8 - Single choice radio button
+st.markdown(
+    "**8. According to the lecture, what is one advantage of training a very large AI model (instead of a small one) on more and more data?**"
+)
+q8_options = [
+    "A large model quickly reaches a performance limit and then stops improving.",
+    "A large model keeps improving its performance as you give it more data, while a small model improves much less.",
+    "A large model always performs worse than a small model on real tasks.",
+    "Only small models can be used with supervised learning.",
+]
+q8 = st.radio("Select one answer for question 8:", q8_options, key="knowledge_q8", index=None)
 
 # Correct Answers
 correct_answers = {
-    "knowledge_q1": "The remaining wild-type allele can still produce functional protein until a second mutation occurs.",
-    "knowledge_q2": "A cell acquires an inactivating mutation in p53, leading to loss of cell cycle arrest after DNA damage.",
-    "knowledge_q3": "Epigenetics modifies gene expression without altering DNA sequence, enabling cell-type-specific transcription programs.",
-    "knowledge_q4": "It introduces a higher rate of mutation, increasing the chance of acquiring oncogene activation and tumor suppressor loss.",
-    "knowledge_q5": "Regulation of protein translation",
+    "knowledge_q1": "AI that can produce high-quality content, such as text, images, and audio.",
+    "knowledge_q2": "It generates text by repeatedly predicting the next word.",
+    "knowledge_q3": "False",
+    "knowledge_q4": "Because it is useful for many different tasks.",
+    "knowledge_q5_a": True,  # Summarise a long article
+    "knowledge_q5_b": False,  # Earn a university degree (incorrect option)
+    "knowledge_q5_c": True,  # Translate a paragraph
+    "knowledge_q5_d": True,  # Proofread a text
+    "knowledge_q6": "Supervised learning",
+    "knowledge_q7": "The company has a software-based application that uses an LLM to automatically route the emails.",
+    "knowledge_q8": "A large model keeps improving its performance as you give it more data, while a small model improves much less.",
 }
 
 # Initialize session state for test completion status
 if "test_submitted" not in st.session_state:
     st.session_state.test_submitted = False
-
-# Calculate Score
-score = 0
 
 # Disable inputs if test has already been submitted
 if st.session_state.test_submitted:
@@ -102,7 +138,7 @@ if st.session_state.test_submitted:
 
     # Display the saved results if available
     if "result_summary" in st.session_state:
-        st.success(f"You scored {st.session_state.score:.2f}/5!")
+        st.success(f"You scored {st.session_state.score:.2f}/8!")
         st.markdown("### Your Test Results")
         st.markdown(
             st.session_state.result_summary.replace("\n", "<br>"),
@@ -114,6 +150,12 @@ else:
         st.session_state.confirm_submission = False
 
     if st.button("Submit and calculate score"):
+        # Enforce completion of all single-choice items
+        required = {"q1": q1, "q2": q2, "q3": q3, "q4": q4, "q6": q6, "q7": q7, "q8": q8}
+        if any(v is None or v == "" for v in required.values()):
+            st.warning("Please answer all questions before submitting.")
+            st.stop()
+        
         st.session_state.confirm_submission = True
 
     if st.session_state.confirm_submission:
@@ -127,51 +169,98 @@ else:
                 st.rerun()
         with col2:
             if st.button("Confirm Submission"):
-                # All questions are now single-choice
-                if q1 == correct_answers["knowledge_q1"]:
-                    score += 1
-                if q2 == correct_answers["knowledge_q2"]:
-                    score += 1
-                if q3 == correct_answers["knowledge_q3"]:
-                    score += 1
-                if q4 == correct_answers["knowledge_q4"]:
-                    score += 1
-                if q5 == correct_answers["knowledge_q5"]:
-                    score += 1
+                # Timer will automatically stop when navigating to next page
+                
+                # Q5 flags and 4-option partial credit
+                q5_flags = {
+                    "A": bool(q5_option_a),
+                    "B": bool(q5_option_b),
+                    "C": bool(q5_option_c),
+                    "D": bool(q5_option_d),
+                }
+                q5_correct = sum([
+                    int(q5_flags["A"] == correct_answers["knowledge_q5_a"]),
+                    int(q5_flags["B"] == correct_answers["knowledge_q5_b"]),
+                    int(q5_flags["C"] == correct_answers["knowledge_q5_c"]),
+                    int(q5_flags["D"] == correct_answers["knowledge_q5_d"]),
+                ])
+                q5_score = q5_correct / 4.0
+                
+                # Build JSON result dict
+                answers_dict = {
+                    "q1": {"user": q1, "correct": q1 == correct_answers["knowledge_q1"]},
+                    "q2": {"user": q2, "correct": q2 == correct_answers["knowledge_q2"]},
+                    "q3": {"user": q3, "correct": q3 == correct_answers["knowledge_q3"]},
+                    "q4": {"user": q4, "correct": q4 == correct_answers["knowledge_q4"]},
+                    "q5": {
+                        "A": (q5_flags["A"] == correct_answers["knowledge_q5_a"]),
+                        "B": (q5_flags["B"] == correct_answers["knowledge_q5_b"]),
+                        "C": (q5_flags["C"] == correct_answers["knowledge_q5_c"]),
+                        "D": (q5_flags["D"] == correct_answers["knowledge_q5_d"]),
+                    },
+                    "q6": {"user": q6, "correct": q6 == correct_answers["knowledge_q6"]},
+                    "q7": {"user": q7, "correct": q7 == correct_answers["knowledge_q7"]},
+                    "q8": {"user": q8, "correct": q8 == correct_answers["knowledge_q8"]},
+                }
+                
+                total_correct = (
+                    int(answers_dict["q1"]["correct"]) + int(answers_dict["q2"]["correct"]) +
+                    int(answers_dict["q3"]["correct"]) + int(answers_dict["q4"]["correct"]) +
+                    q5_score + int(answers_dict["q6"]["correct"]) + int(answers_dict["q7"]["correct"]) +
+                    int(answers_dict["q8"]["correct"])
+                )
+                
+                result = {
+                    "answers": answers_dict,
+                    "q5_subscore": q5_score,
+                    "score_total": float(total_correct),
+                    "max_score": 8.0,  # treat Q5 as 1.0 in total
+                }
+                
+                # Save via session manager
+                from session_manager import get_session_manager
+                sm = get_session_manager()
+                sm.save_knowledge_test_results(result)
+                st.success("Knowledge test saved.")
 
                 # Store the score in session state to mark test as completed
-                st.session_state.score = score
+                st.session_state.score = total_correct
                 st.session_state.test_submitted = True
 
-                st.success(f"You scored {score:.2f}/5!")
+                st.success(f"You scored {total_correct:.2f}/8!")
 
                 # Summary with detailed breakdown
+                q5_response = []
+                if q5_option_a:
+                    q5_response.append("A")
+                if q5_option_b:
+                    q5_response.append("B")
+                if q5_option_c:
+                    q5_response.append("C")
+                if q5_option_d:
+                    q5_response.append("D")
+                q5_text = ", ".join(q5_response) if q5_response else "None selected"
+                
                 result_summary = f"""
 Your Responses:
 --------------------------------------
-1. {q1} {'✓' if q1 == correct_answers['knowledge_q1'] else '✗'}
-2. {q2} {'✓' if q2 == correct_answers['knowledge_q2'] else '✗'}
-3. {q3} {'✓' if q3 == correct_answers['knowledge_q3'] else '✗'}
-4. {q4} {'✓' if q4 == correct_answers['knowledge_q4'] else '✗'}
-5. {q5} {'✓' if q5 == correct_answers['knowledge_q5'] else '✗'}
+1. {q1} {'✓' if answers_dict['q1']['correct'] else '✗'}
+2. {q2} {'✓' if answers_dict['q2']['correct'] else '✗'}
+3. {q3} {'✓' if answers_dict['q3']['correct'] else '✗'}
+4. {q4} {'✓' if answers_dict['q4']['correct'] else '✗'}
+5. {q5_text} (Partial credit: {q5_correct}/4 options correct)
+6. {q6} {'✓' if answers_dict['q6']['correct'] else '✗'}
+7. {q7} {'✓' if answers_dict['q7']['correct'] else '✗'}
+8. {q8} {'✓' if answers_dict['q8']['correct'] else '✗'}
 
-Total Score: {score}/5
+Total Score: {total_correct:.2f}/8
 """
 
                 # Store the result summary in session state
                 st.session_state.result_summary = result_summary
 
-                # Import the session manager
-                from session_manager import get_session_manager
-
-                # Get or create a session manager instance
-                session_manager = get_session_manager()
-
-                # Save the test results using the session manager
-                file_path = session_manager.save_knowledge_test_results(result_summary)
-
                 # Get the session info for display
-                session_info = session_manager.get_session_info()
+                session_info = sm.get_session_info()
                 fake_name = session_info["fake_name"]
 
                 st.success(
@@ -183,40 +272,59 @@ Total Score: {score}/5
 
                 # Format the results with colored indicators for correct/incorrect answers
                 formatted_results = "<h4>Question 1:</h4>"
-                formatted_results += f"<p>Your answer: {q1} {'✅' if q1 == correct_answers['knowledge_q1'] else '❌'}</p>"
-                if q1 != correct_answers["knowledge_q1"]:
+                formatted_results += f"<p>Your answer: {q1} {'✅' if answers_dict['q1']['correct'] else '❌'}</p>"
+                if not answers_dict["q1"]["correct"]:
                     formatted_results += (
                         f"<p>Correct answer: {correct_answers['knowledge_q1']}</p>"
                     )
 
                 formatted_results += "<h4>Question 2:</h4>"
-                formatted_results += f"<p>Your answer: {q2} {'✅' if q2 == correct_answers['knowledge_q2'] else '❌'}</p>"
-                if q2 != correct_answers["knowledge_q2"]:
+                formatted_results += f"<p>Your answer: {q2} {'✅' if answers_dict['q2']['correct'] else '❌'}</p>"
+                if not answers_dict["q2"]["correct"]:
                     formatted_results += (
                         f"<p>Correct answer: {correct_answers['knowledge_q2']}</p>"
                     )
 
                 formatted_results += "<h4>Question 3:</h4>"
-                formatted_results += f"<p>Your answer: {q3} {'✅' if q3 == correct_answers['knowledge_q3'] else '❌'}</p>"
-                if q3 != correct_answers["knowledge_q3"]:
+                formatted_results += f"<p>Your answer: {q3} {'✅' if answers_dict['q3']['correct'] else '❌'}</p>"
+                if not answers_dict["q3"]["correct"]:
                     formatted_results += (
                         f"<p>Correct answer: {correct_answers['knowledge_q3']}</p>"
                     )
 
                 formatted_results += "<h4>Question 4:</h4>"
-                formatted_results += f"<p>Your answer: {q4} {'✅' if q4 == correct_answers['knowledge_q4'] else '❌'}</p>"
-                if q4 != correct_answers["knowledge_q4"]:
+                formatted_results += f"<p>Your answer: {q4} {'✅' if answers_dict['q4']['correct'] else '❌'}</p>"
+                if not answers_dict["q4"]["correct"]:
                     formatted_results += (
                         f"<p>Correct answer: {correct_answers['knowledge_q4']}</p>"
                     )
 
-                formatted_results += "<h4>Question 5:</h4>"
-                formatted_results += f"<p>Your answer: {q5} {'✅' if q5 == correct_answers['knowledge_q5'] else '❌'}</p>"
-                if q5 != correct_answers["knowledge_q5"]:
+                formatted_results += "<h4>Question 5 (Multiple Select):</h4>"
+                formatted_results += f"<p>Your answers: {q5_text}</p>"
+                formatted_results += f"<p>Score: {q5_correct}/4 options correct (partial credit: {q5_score:.2f}/1.0)</p>"
+                formatted_results += "<p>Correct answers: A (Summarise), C (Translate), D (Proofread)</p>"
+
+                formatted_results += "<h4>Question 6:</h4>"
+                formatted_results += f"<p>Your answer: {q6} {'✅' if answers_dict['q6']['correct'] else '❌'}</p>"
+                if not answers_dict["q6"]["correct"]:
                     formatted_results += (
-                        f"<p>Correct answer: {correct_answers['knowledge_q5']}</p>"
+                        f"<p>Correct answer: {correct_answers['knowledge_q6']}</p>"
                     )
 
-                formatted_results += f"<h4>Total Score: {score}/5</h4>"
+                formatted_results += "<h4>Question 7:</h4>"
+                formatted_results += f"<p>Your answer: {q7} {'✅' if answers_dict['q7']['correct'] else '❌'}</p>"
+                if not answers_dict["q7"]["correct"]:
+                    formatted_results += (
+                        f"<p>Correct answer: {correct_answers['knowledge_q7']}</p>"
+                    )
+
+                formatted_results += "<h4>Question 8:</h4>"
+                formatted_results += f"<p>Your answer: {q8} {'✅' if answers_dict['q8']['correct'] else '❌'}</p>"
+                if not answers_dict["q8"]["correct"]:
+                    formatted_results += (
+                        f"<p>Correct answer: {correct_answers['knowledge_q8']}</p>"
+                    )
+
+                formatted_results += f"<h4>Total Score: {total_correct:.2f}/8</h4>"
 
                 st.markdown(formatted_results, unsafe_allow_html=True)

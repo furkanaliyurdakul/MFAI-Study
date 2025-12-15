@@ -1,14 +1,14 @@
-# SPDX-License-Identifier: MIT
+﻿# SPDX-License-Identifier: MIT
 """Streamlit entry point – multi‑step learning platform wrapper.
 
 Pages:
   • *Home* (study intro)
   • *Student Profile Survey*
-  • *Personalised / Generic Learning* (Gemini tutor)
+  • *AI Learning Assistant* (multilingual study)
   • *Knowledge Test*
   • *User‑Experience Questionnaire*
 
-Relies on :pyfile:`Gemini_UI.py` for all tutor‑specific helpers.
+Relies on :pyfile:`Gemini_UI.py` for AI assistant helpers.
 """
 
 # ───────────────────────────────────────────────────────────────
@@ -20,10 +20,27 @@ import atexit
 import json
 import streamlit as st
 
-# ── Authentication Check (MUST BE FIRST) ──────────────────────
+# ── Page Config (MUST BE FIRST STREAMLIT COMMAND) ──────────────
+st.set_page_config(page_title="AI Learning Platform", layout="wide")
+
+# ── Authentication Check ──────────────────────────────────────
 from login_page import require_authentication
 credential_config = require_authentication()
 print("🔧 DEBUG: Authentication completed")
+
+# ── Presence Tracker (for concurrent session monitoring) ────────
+try:
+    from presence_tracker import get_presence_tracker
+    presence = get_presence_tracker(max_concurrent=2)  # Adjust max as needed
+    if presence:
+        print("✅ Presence tracker initialized")
+    else:
+        print("⚠️ Presence tracker returned None")
+except Exception as e:
+    presence = None
+    print(f"⚠️ Presence tracker unavailable: {e}")
+    import traceback
+    traceback.print_exc()
 
 # ── Initialize Session State (IMMEDIATELY AFTER AUTH) ─────────
 def ensure_session_state_initialized():
@@ -34,8 +51,6 @@ def ensure_session_state_initialized():
         "exported_images": [],  # list[Path] – exported PPT slides
         "transcription_text": "",  # Whisper output
         "selected_slide": "Slide 1",
-        "profile_text": "",  # long plain‑text profile
-        "profile_dict": {},  # parsed dict version
         "debug_logs": [],  # collected via Gemini_UI.debug_log(...)
         "messages": [],
         "transcription_loaded": False,
@@ -65,8 +80,17 @@ from config import get_config, get_course_title, get_platform_name, get_ui_text
 config = get_config()
 print("🔧 DEBUG: Config loaded")
 
+# Language names for display
+language_names = {
+    "en": "English",
+    "de": "German",
+    "nl": "Dutch",
+    "tr": "Turkish",
+    "sq": "Albanian",
+    "hi": "Hindi"
+}
+
 LABEL: str = config.platform.learning_section_name
-st.set_page_config(page_title=f"{get_platform_name()}", layout="wide")
 atexit.register(lambda: get_learning_logger().save_logs(force=True))
 atexit.register(lambda: page_dump(Path(sm.session_dir)))
 
@@ -74,6 +98,7 @@ atexit.register(lambda: page_dump(Path(sm.session_dir)))
 import os
 from pathlib import Path
 from typing import Dict, List
+from datetime import datetime, timezone
 
 # ── third‑party ────────────────────────────────────────────────
 #import google.generativeai as genai
@@ -83,10 +108,9 @@ from google import genai
 from google.genai import types
 
 # ── local ──────────────────────────────────────────────────────
-# NEW – GDPR docs ------------------------------------------------
-DOCS_DIR   = Path(__file__).parent / "docs"
-INFO_PDF   = DOCS_DIR / "Model informatiebrief AVG English.pdf"
-CONSENT_PDF = DOCS_DIR / "ICF SMEC ENG.pdf"
+# NEW – Consent and information document -------------------------
+DOCS_DIR = Path(__file__).parent / "docs"
+CONSENT_PDF = DOCS_DIR / "Participant_Information_and_Consent.pdf"
 
 from Gemini_UI import (
     TRANSCRIPTION_DIR,
@@ -114,7 +138,7 @@ from Gemini_UI import (
 from Gemini_UI import (
     transcribe_audio as transcribe_audio_from_file,  # alias → keep old name
 )
-from personalized_learning_logger import get_learning_logger
+from learning_interaction_logger import get_learning_logger
 from session_manager import get_session_manager
 from page_timer import start as page_timer_start      # put this with the other imports
 from page_timer import dump as page_dump
@@ -127,17 +151,17 @@ if "_page_timer" not in st.session_state:
     page_timer_start("home")
 
 # ── Authentication-based Configuration ─────────────────────────────────
-# Study condition and modes are now set based on login credentials
-if "condition_chosen" not in st.session_state:
-    # Get condition from authentication system
+# Language and modes are now set based on login credentials
+if "language_code" not in st.session_state:
+    # Get language from authentication system
     from authentication import get_auth_manager
     auth_manager = get_auth_manager()
-    condition_override = auth_manager.get_study_condition_override()
+    language_code = auth_manager.get_language_code()
     
-    if condition_override is not None:
-        st.session_state["use_personalisation"] = condition_override
-        st.session_state["condition_chosen"] = True
-        sm.condition = "personalised" if condition_override else "generic"
+    if language_code:
+        # Always update language_code from auth_manager (picks up dev mode changes)
+        st.session_state["language_code"] = language_code
+        sm.language_code = language_code
     
     # Set special modes based on credentials
     if credential_config:
@@ -147,6 +171,71 @@ if "condition_chosen" not in st.session_state:
         # Default values when no authentication is active
         st.session_state["dev_mode"] = False
         st.session_state["fast_test_mode"] = False
+    
+    # CHECK CAPACITY AND REGISTER SESSION (except for dev mode)
+    print(f"🔧 DEBUG: Capacity check - presence={presence is not None}, credential_config={credential_config is not None}, dev_mode={credential_config.dev_mode if credential_config else 'N/A'}")
+    
+    if presence and credential_config and not credential_config.dev_mode:
+        session_info = sm.get_session_info()
+        print(f"🔧 DEBUG: Checking session {session_info['session_id']}")
+        
+        # Check if session already exists in database
+        existing_session = presence.get_session_info(session_info["session_id"])
+        print(f"🔧 DEBUG: Existing session in DB: {existing_session is not None}")
+        
+        if not existing_session:
+            # New session - check capacity before registering
+            print(f"🔧 DEBUG: New session - checking capacity...")
+            can_start, message = presence.can_start_interview()
+            print(f"🔧 DEBUG: Capacity check result: can_start={can_start}, message={message}")
+            
+            if not can_start:
+                # Platform at capacity - show message and stop
+                st.error("🚦 **Platform Currently at Capacity**")
+                st.warning(message)
+                
+                active_count = presence.count_active_interviews()
+                active_sessions = presence.count_active_sessions()
+                
+                st.info(
+                    f"**Current Status:**\n\n"
+                    f"- Active interviews: {active_count}/{presence.max_concurrent}\n"
+                    f"- Total active sessions: {active_sessions}\n\n"
+                    f"**What happened:**\n"
+                    f"You logged in successfully, but all interview slots are currently occupied.\n\n"
+                    f"**Next steps:**\n"
+                    f"1. Click the **Logout** button in the sidebar\n"
+                    f"2. Wait 2-5 minutes for a slot to open\n"
+                    f"3. Try logging in again\n\n"
+                    f"💡 Active interviews typically complete within 20-30 minutes."
+                )
+                
+                st.stop()
+            else:
+                # Capacity available - register the session now
+                presence.mark_session_started(
+                    session_id=session_info["session_id"],
+                    user_id=credential_config.username,
+                    language_code=language_code
+                )
+                print(f"📡 Session {session_info['session_id']} registered in presence tracker")
+                print(f"✅ Capacity check passed: {message}")
+                st.session_state["session_registered"] = True  # Mark session as registered
+        else:
+            print(f"📡 Session {session_info['session_id']} already registered, skipping capacity check")
+            st.session_state["session_registered"] = True  # Already registered
+    elif presence and credential_config and credential_config.dev_mode:
+        # Dev mode - always register session without capacity check
+        session_info = sm.get_session_info()
+        existing_session = presence.get_session_info(session_info["session_id"])
+        if not existing_session:
+            presence.mark_session_started(
+                session_id=session_info["session_id"],
+                user_id=credential_config.username,
+                language_code=language_code
+            )
+            print(f"📡 [DEV MODE] Session {session_info['session_id']} registered in presence tracker")
+            st.session_state["session_registered"] = True  # Mark dev session as registered
 
 # ───────────────────────────────────────────────────────────────
 # Globals & constants
@@ -156,6 +245,31 @@ FAST_TEST_MODE: bool = st.session_state.get("fast_test_mode", False)
 TOPIC: str = config.course.course_title
 API_KEY: str = st.secrets["google"]["api_key"]
 
+# ── Load Course Content (slides + transcription) ───────────────
+# This loads the actual course materials that are the same for all users
+from Gemini_UI import load_course_content
+if not st.session_state.get("course_content_loaded", False):
+    load_course_content()  # Loads slides and transcription from course files
+    st.session_state["course_content_loaded"] = True
+    if DEV_MODE:
+        print(f"📚 Course content loaded: {len(st.session_state.get('exported_images', []))} slides")
+
+# ── Inject JavaScript Heartbeat ────────────────────────────────
+# This runs on every page load and keeps session active in Supabase
+# ONLY inject heartbeat if session was successfully registered
+if presence and credential_config and "language_code" in st.session_state and st.session_state.get("session_registered", False):
+    session_info = sm.get_session_info()
+    current_page = st.session_state.get("current_page", "home")
+    print(f"📡 Injecting heartbeat for session {session_info['session_id']}, user {credential_config.username}, page {current_page}")
+    presence.inject_heartbeat(
+        session_id=session_info["session_id"],
+        user_id=credential_config.username,
+        language_code=st.session_state["language_code"],
+        current_page=current_page
+    )
+else:
+    print(f"⚠️ Heartbeat NOT injected - presence: {presence is not None}, credential: {credential_config is not None}, language: {'language_code' in st.session_state}")
+
 # Yiman = AIzaSyCdNS08cjO_lvj35Ytvs8szbUmeAdo4aIA
 # Furkan Ali = AIzaSyArkmZSrZaeWQSfL9CFkQ0jXaEe4D9sMEQ
 
@@ -163,16 +277,28 @@ API_KEY: str = st.secrets["google"]["api_key"]
 # Helper functions
 # ───────────────────────────────────────────────────────────────
 
-def current_condition() -> str:
-    return "personalised" if st.session_state.get("use_personalisation", True) else "generic"
+def current_language() -> str:
+    """Get current language code from session state."""
+    return st.session_state.get("language_code", "en")
 
 def navigate_to(page: str) -> None:
     """Client‑side router with prerequisite checks."""
 
+    # DEV MODE GOD MODE: Skip all checks
+    if DEV_MODE:
+        page_dump(Path(sm.session_dir))
+        page_timer_start(page)
+        st.session_state.current_page = page
+        st.rerun()
+        return
+
     allowed = False
     if page == "profile_survey":
-        allowed = True
-    elif page == "personalized_learning":
+        # Require consent before accessing profile survey
+        allowed = st.session_state.get("consent_given", False)
+        if not allowed:
+            st.warning("Please read the study information and give your consent on the Home page first.")
+    elif page == "learning":
         allowed = st.session_state.profile_completed
         if not allowed:
             st.warning(config.ui_text.warning_complete_profile)
@@ -217,19 +343,83 @@ def navigate_to(page: str) -> None:
 # ───────────────────────────────────────────────────────────────
 
 st.sidebar.title("Navigation")
+
+# DEV MODE INDICATOR
+if DEV_MODE:
+    st.sidebar.warning("🔧 **DEV MODE ACTIVE**\n\nGod Mode: All pages unlocked")
+    if FAST_TEST_MODE:
+        st.sidebar.info("⚡ Fast Test Mode: Mock data loaded")
+
 nav_items = [
     ("Home", "home", True),
     (config.ui_text.nav_profile, "profile_survey", st.session_state.get("profile_completed", False)),
-    (f"{LABEL}", "personalized_learning", st.session_state.get("learning_completed", False)),
+    (f"{LABEL}", "learning", st.session_state.get("learning_completed", False)),
     (config.ui_text.nav_knowledge, "knowledge_test", st.session_state.get("test_completed", False)),
     (config.ui_text.nav_ueq, "ueq_survey", st.session_state.get("ueq_completed", False)),
 ]
 
+# Add pilot smoke test page for dev mode only
+if DEV_MODE:
+    nav_items.append(("🧪 Pilot Smoke Test", "pilot_smoke_test", False))
+
 for title, target, done in nav_items:
     prefix = "✅ " if done else "⬜ "
-    if st.sidebar.button(f"{prefix}{title}"):
-        navigate_to(target)
+    # Disable navigation for non-dev users if requirements not met
+    if not DEV_MODE:
+        # Check if button should be disabled
+        button_disabled = False
+        if target == "profile_survey" and not st.session_state.get("consent_given", False):
+            button_disabled = True
+        elif target == "learning" and not st.session_state.get("profile_completed", False):
+            button_disabled = True
+        elif target == "knowledge_test" and not (st.session_state.get("profile_completed", False) and st.session_state.get("learning_completed", False)):
+            button_disabled = True
+        elif target == "ueq_survey" and not (st.session_state.get("profile_completed", False) and st.session_state.get("learning_completed", False) and st.session_state.get("test_completed", False)):
+            button_disabled = True
+        
+        if st.sidebar.button(f"{prefix}{title}", disabled=button_disabled):
+            navigate_to(target)
+            st.rerun()
+    else:
+        # Dev mode - all buttons enabled
+        if st.sidebar.button(f"{prefix}{title}"):
+            navigate_to(target)
+            st.rerun()
+
+# Session info after navigation (no separator for clean UI)
+st.sidebar.subheader("Session Info")
+st.sidebar.info(f"**User:** {credential_config.description}")
+
+# Show language selector for dev mode or static language for participants
+if DEV_MODE:
+    from config import get_supported_languages
+    languages = get_supported_languages()
+    
+    # Get current language from session state if available
+    current_lang = st.session_state.get("language_code", credential_config.language_code)
+    current_index = list(languages.keys()).index(current_lang) if current_lang in languages else 0
+    
+    selected_lang = st.sidebar.selectbox(
+        "🔧 Language (Dev Mode)",
+        options=list(languages.keys()),
+        format_func=lambda code: f"{languages[code]['display_name']} ({code})",
+        index=current_index,
+        key="dev_language_selector"
+    )
+    
+    # Update session state if language changed
+    if selected_lang != st.session_state.get("language_code"):
+        st.session_state["language_code"] = selected_lang
         st.rerun()
+else:
+    # For participants, show fixed language
+    st.sidebar.info(f"**Language:** {credential_config.language_code.upper()}")
+
+if st.sidebar.button("Logout", type="secondary"):
+    from authentication import get_auth_manager
+    auth_manager = get_auth_manager()
+    auth_manager.logout()
+    st.rerun()
 
 # ───────────────────────────────────────────────────────────────
 # Page logic – each branch keeps the original behaviour
@@ -239,11 +429,16 @@ if st.session_state.current_page == "home":
     # ------------------------------------------------------------------
     # HOME  ─ study intro
     # ------------------------------------------------------------------
+    # Show capacity warning at entry
+    from capacity_manager import get_capacity_manager
+    capacity_mgr = get_capacity_manager()
+    capacity_mgr.show_capacity_warning(location="home")
+    
     st.title(f"{config.platform.learning_section_name} Platform")
     st.markdown(
         f"""
 ### Welcome – what this session is about  
-You are taking part in our KU Leuven study on **AI‑generated, personalised learning explanations**.  
+You are taking part in our KU Leuven study on **language fairness in AI-assisted learning**.  
 We are studying whether tailoring explanations to a learner’s background affects their understanding of the material compared to providing general explanations.
 
 In today's session, it will be about **{TOPIC}**.
@@ -253,8 +448,8 @@ In today's session, it will be about **{TOPIC}**.
 | Step | What you do | Time | What you provide |
 |------|-------------|------|------------------|
 | 1 | Read & sign the digital consent form | ≈ 2 min | e‑signature |
-| 2 | **Student Profile Survey** | ≈ 8 min | background, learning goals |
-| 3 | **{LABEL}** using LLM | ≈ 25 min | questions to the LLM (optional) |
+| 2 | **Student Profile Survey** | ≈ 8 min | demographics, language skills, AI knowledge |
+| 3 | **{LABEL}** using LLM | ≈ 25 min | interact with AI assistant |
 | 4 | **Knowledge Test** | ≈ 10 min | answers to 5 quiz items |
 | 5 | **User‑Experience Questionnaire** | ≈ 8 min | 26 quick ratings |
 | 6 | Short verbal interview / Q&A | ≈ 5 min | feedback |
@@ -269,12 +464,16 @@ In today's session, it will be about **{TOPIC}**.
 
 ---
 #### Why we record your data  
-We log your inputs and the system's responses to analyse the tutor’s effectiveness.  
-Your name is replaced by a random code; you may stop at any moment without penalty.
+We log your interactions with the AI assistant to analyze learning effectiveness across different languages.  
+Your identity is pseudonymized; you may stop at any moment without penalty.
+
+---
+#### Your Study Conditions
+You have been assigned to complete this session in **{language_names.get(current_language, 'English')}**. All learning materials and AI interactions will be in this language. This is part of our research comparing learning outcomes across different languages.
 
 ---
 When you are ready, click **“Start the Student Profile Survey”** below.  
-Thank you for helping us improve adaptive learning experiences!
+Thank you for helping us understand how language affects AI-assisted learning!
 """
     )
     # --- GDPR / informed-consent box ---------------------------------
@@ -285,17 +484,14 @@ Thank you for helping us improve adaptive learning experiences!
             "• Pseudonymised study data are used **only** for academic research."
         )
 
-        col_a, col_b = st.columns(2)
-        with col_a:
-            with open(CONSENT_PDF, "rb") as f:
-                st.download_button(
-                    "Informed-consent form (PDF)", f, file_name=CONSENT_PDF.name
-                )
-        with col_b:
-            with open(INFO_PDF, "rb") as f:
-                st.download_button(
-                    "GDPR information letter (PDF)", f, file_name=INFO_PDF.name
-                )
+        # Single download button for combined document
+        with open(CONSENT_PDF, "rb") as f:
+            st.download_button(
+                "Download Participant Information and Consent Form (PDF)",
+                f,
+                file_name=CONSENT_PDF.name,
+                type="primary"
+            )
     # one-line checkbox underneath the expander (outside the `with` block!)
     consent_ok = st.checkbox(
         "I have read the documents above and **give my consent** to participate.",
@@ -312,6 +508,14 @@ Thank you for helping us improve adaptive learning experiences!
             metadata={}
         )
         st.session_state["consent_logged"] = True
+        
+        # Sync consent to analytics database
+        from analytics_syncer import get_analytics_syncer
+        analytics = get_analytics_syncer()
+        if analytics:
+            sm = get_session_manager()
+            session_info = sm.get_session_info()
+            analytics.update_consent(session_info["session_id"])
 
     # — facilitator: choose study condition --------------------------------
 #    if "condition_chosen" not in st.session_state:
@@ -334,24 +538,21 @@ Thank you for helping us improve adaptive learning experiences!
 #            st.rerun()
 
 
-    # — fast test helper (mock data preloading) --------------------------------
+    # — fast test helper (mock profile only) --------------------------------
+    # Course content (slides + transcription) is loaded for everyone
+    # Fast test mode just provides a mock profile to skip the survey
     if FAST_TEST_MODE and not st.session_state.get("fast_test_setup_completed", False):
-        print(f"🔧 DEBUG: Setting up fast test mode stubs")
-        # minimal stubs used by Gemini_UI
-        st.session_state.exported_images = [
-            Path("uploads/ppt/picture/Slide_4 of Lecture8.png")
-        ]
-        st.session_state.transcription_text = (
-            "This is a mock transcription for fast testing."
-        )
+        print(f"🔧 DEBUG: Setting up fast test mode - loading mock profile")
+        
         sample_path = Path(__file__).parent / "uploads" / "profile" / "Test_User_profile.txt" 
-        print("🔧 DEBUG: Fast test mode stubs setup completed")
-        profile_txt = sample_path.read_text(encoding="utf-8")
+        if sample_path.exists():
+            profile_txt = sample_path.read_text(encoding="utf-8")
+            st.session_state.profile_text = profile_txt
+            st.session_state.profile_dict = parse_detailed_student_profile(profile_txt)
+            print("🔧 DEBUG: Fast test mode mock profile loaded")
+        else:
+            print(f"⚠️ WARNING: Mock profile not found at {sample_path}")
 
-        st.session_state.profile_text  = profile_txt
-        st.session_state.profile_dict  = parse_detailed_student_profile(profile_txt)
-
-        st.session_state.selected_slide = "Slide 1"
         st.session_state["fast_test_setup_completed"] = True
         st.rerun()
 
@@ -360,124 +561,57 @@ Thank you for helping us improve adaptive learning experiences!
         use_container_width=True,
         disabled=not st.session_state.get("consent_given", False),
     ):
-        navigate_to("profile_survey")
+        if st.session_state.get("consent_given", False):
+            navigate_to("profile_survey")
+        else:
+            st.warning("Please give your consent first.")
 
 # ------------------------------------------------------------------------
 # PROFILE SURVEY  – writes profile text & dict to session_state
 # ------------------------------------------------------------------------
 elif st.session_state.current_page == "profile_survey":
     import importlib
-
     import testui_profilesurvey
+    importlib.reload(testui_profilesurvey)
 
-    importlib.reload(testui_profilesurvey)  # ensure fresh on each run
-    st.sidebar.success("Profile survey module loaded successfully")
-
+    # The module handles its own review display
     if st.session_state.get("show_review", False):
         st.session_state.profile_completed = True
-
-        # Build a *single* long profile string (if not yet done) --------------
-        if not st.session_state.get("profile_text"):
-            # Skip profile building in fast test mode since it's pre-loaded
-            if not FAST_TEST_MODE:
-                # Collect answers from the survey widgets (mirrors the original logic)
-                survey = testui_profilesurvey  # alias
-                name = st.session_state.get("name", "")
-                if not name:  # Fallback for missing name
-                    name = "Test_User"
-                age = st.session_state.get("age", "")
-                edu = st.session_state.get("education_level", "")
-                major = st.session_state.get("major", "")
-                work = st.session_state.get("work_exp", "")
-                hobbies = st.session_state.get("hobbies", "")
-                strongest = st.session_state.get("strongest_subject", "")
-                weakest = st.session_state.get("challenging_subject", "")
-                prof_level = st.session_state.get("proficiency_level", "")
-
-                ratings = {s: st.session_state.get(s) for s in survey.subjects}
-                prio_ratings = {
-                    p: st.session_state.get(p) for p in survey.learning_priorities
-                }
-                sel_strats = [
-                    s for s in survey.learning_strategies if st.session_state.get(s)
-                ]
-                short_goals = [
-                    g for g in survey.short_term_goals if st.session_state.get(f"short_{g}")
-                ]
-                long_goals = [
-                    g for g in survey.long_term_goals if st.session_state.get(f"long_{g}")
-                ]
-                barriers = [
-                    b for b in survey.barriers if st.session_state.get(f"barrier_{b}")
-                ]
-
-                profile_lines: List[str] = [
-                    "Student Profile Survey Responses:",
-                    "=" * 36,
-                    "",
-                    "Section 1: Academic and Background Information",
-                    "-" * 45,
-                    f"1. Name: {name}",
-                    f"2. Age: {age}",
-                    f"3. Study background: {edu}",
-                    f"4. Major of education: {major}",
-                    f"5. Work experience: {work}",
-                    f"6. Hobbies or interests: {hobbies}",
-                    "",
-                    "7. Academic performance ranking (1=Weakest, 5=Strongest):",
-                ]
-                for i, (subj, rating) in enumerate(ratings.items()):
-                    profile_lines.append(f"   {chr(65+i)}. {subj}: {rating}")
-
-                profile_lines.extend(
-                    [
-                        "",
-                        f"8. Strongest Subject: {strongest}",
-                        f"9. Most Challenging Subject: {weakest}",
-                        "",
-                        "10. Learning priorities ranking (1=least important, 5=most important):",
-                    ]
-                )
-                for i, (prio, rating) in enumerate(prio_ratings.items()):
-                    profile_lines.append(f"   {chr(65+i)}. {prio}: {rating}")
-
-                profile_lines.extend(
-                    [
-                        "",
-                        f"11. Preferred learning strategy: {'; '.join(sel_strats)}",
-                        f"12. Current proficiency level: {prof_level}",
-                        f"13. Short-term academic goals: {'; '.join(short_goals)}",
-                        f"14. Long-term academic/career goals: {'; '.join(long_goals)}",
-                        f"15. Potential Barriers: {'; '.join(barriers)}",
-                    ]
-                )
-                profile_text = "\n".join(profile_lines)
-                st.session_state.profile_text = profile_text
-
-                # Persist original profile
-                profile_path = UPLOAD_DIR_PROFILE / f"{name.replace(' ', '_')}_profile.txt"
-                profile_path.write_text(profile_text, encoding="utf‑8")
-
-                # Dict version for later use
-                st.session_state.profile_dict = parse_detailed_student_profile(profile_text)
-
-        st.success(f"Profile saved – proceed to the {LABEL} section.")
+        st.markdown("---")
+        st.success(f"✅ Profile saved – proceed to the {LABEL} section.")
         if st.button(f"Continue to {LABEL}", use_container_width=True):
-            navigate_to("personalized_learning")
+            navigate_to("learning")
 
 # ------------------------------------------------------------------------
-# PERSONALISED / GENERIC LEARNING  – Gemini tutor UI
+# AI LEARNING ASSISTANT  – Gemini AI assistant UI
 # ------------------------------------------------------------------------
-elif st.session_state.current_page == "personalized_learning":
-    if not st.session_state.profile_completed:
+elif st.session_state.current_page == "learning":
+    if not st.session_state.profile_completed and not DEV_MODE:
         st.warning("Please complete the Student Profile Survey first.")
         if st.button("Go to Student Profile Survey"):
             navigate_to("profile_survey")
     else:
+        # Capacity already checked at login, just mark interview as started
+        if presence and not st.session_state.get("interview_access_granted", False):
+            st.session_state["interview_access_granted"] = True
+            if DEV_MODE:
+                st.success("✅ Access granted - interview session active")
+        
         # --- header ------------------------------------------------------
-        st.title(f"Explanation Generator")
+        st.title(f"AI Learning Assistant")
         st.markdown(
-            f"This component lets you generate explanations with the uploaded slides and lecture audio."
+            f"""
+Interact with the AI assistant to explore the course materials. You can ask questions about the slides or request explanations of concepts covered in the lecture.
+
+### How to Use This Section
+
+You can interact with the AI assistant in two ways:
+
+1. **Ask about specific slides**: Click "Explain this slide" below any slide to get an explanation
+2. **Ask your own questions**: Type questions in the chat box about any concept from the lecture
+
+The AI assistant has access to all {config.course.total_slides} slides and the full lecture transcription. **Use the AI assistant naturally, as you would in your everyday learning.** There is no minimum or maximum number of interactions required – explore at your own pace.
+"""
         )
 
         #genai.configure(api_key=API_KEY)
@@ -499,11 +633,9 @@ elif st.session_state.current_page == "personalized_learning":
         # Send base context only once per session  
         if not st.session_state.get("gemini_chat_initialized", False):
             print("🔧 DEBUG: About to send base context to Gemini")
-            PERSONALISED = st.session_state.get("use_personalisation", True)
 
             base_ctx = make_base_context(
-                st.session_state.profile_dict if PERSONALISED else None,
-                personalised=PERSONALISED
+                language_code=current_language()
             )
             print("🔧 DEBUG: Base context created, sending to Gemini...")
 
@@ -515,7 +647,7 @@ elif st.session_state.current_page == "personalized_learning":
                 interaction_type="prime_context",
                 user_input=base_ctx,           # already a small dict
                 system_response="(no reply – prime only)",
-                metadata={"condition": current_condition()},
+                metadata={"language_code": current_language()},
             )
 
             #st.session_state.messages.append(
@@ -594,36 +726,42 @@ elif st.session_state.current_page == "personalized_learning":
             # No upload access: Use pre-processed course content
             print("🔧 DEBUG: Starting no-upload mode file loading")
             st.sidebar.header("Course Content")
-            st.sidebar.info(f"**{config.course.course_title}**\n\nUsing pre-loaded course materials:\n- {config.course.total_slides} lecture slides\n- Complete audio transcription")
+            st.sidebar.info(f"Ask questions or request explanations about any concept")
             
             # Load pre-transcribed course content (cached)
-            print("🔧 DEBUG: About to check transcription loading")
+            if DEV_MODE:
+                print("🔧 DEBUG: About to check transcription loading")
             if not st.session_state.get("transcription_text"):
-                print("🔧 DEBUG: Loading transcription file")
+                if DEV_MODE:
+                    print("🔧 DEBUG: Loading transcription file")
                 transcription_file = TRANSCRIPTION_DIR / config.course.transcription_filename
                 if transcription_file.exists():
                     try:
                         st.session_state.transcription_text = transcription_file.read_text(encoding="utf-8")
                         st.session_state.transcription_loaded = True
-                        st.sidebar.success(f"✅ Transcription loaded ({len(st.session_state.transcription_text):,} chars)")
-                        print("🔧 DEBUG: Transcription loaded successfully")
+                        if DEV_MODE:
+                            st.sidebar.success(f"✅ Transcription loaded ({len(st.session_state.transcription_text):,} chars)")
+                            print("🔧 DEBUG: Transcription loaded successfully")
                     except Exception as e:
-                        print(f"🔧 DEBUG: Error loading transcription: {e}")
-                        st.sidebar.error(f"❌ Error loading transcription: {e}")
+                        if DEV_MODE:
+                            print(f"🔧 DEBUG: Error loading transcription: {e}")
+                            st.sidebar.error(f"❌ Error loading transcription: {e}")
                         st.session_state.transcription_loaded = False
                 else:
-                    print("🔧 DEBUG: Transcription file not found")
-                    st.sidebar.error(f"❌ {config.course.course_title} transcription not found")
+                    if DEV_MODE:
+                        print("🔧 DEBUG: Transcription file not found")
+                        st.sidebar.error(f"❌ {config.course.course_title} transcription not found")
                     st.session_state.transcription_loaded = False
             elif st.session_state.get("transcription_loaded", False):
-                print("🔧 DEBUG: Transcription already loaded")
-                st.sidebar.success(f"✅ Transcription loaded ({len(st.session_state.transcription_text):,} chars)")
+                if DEV_MODE:
+                    print("🔧 DEBUG: Transcription already loaded")
+                    st.sidebar.success(f"✅ Transcription loaded ({len(st.session_state.transcription_text):,} chars)")
             
             # Load pre-processed course slides (cached)
             if not st.session_state.get("exported_images"):
-                slides_dir = UPLOAD_DIR_PPT / "fixed" / "picture"
+                slides_dir = UPLOAD_DIR_PPT / config.course.slides_directory
                 if slides_dir.exists():
-                    slide_files = list(slides_dir.glob("Slide_*.jpg"))
+                    slide_files = list(slides_dir.glob("Slide_* of What is Generative AI.png"))
                     if slide_files:
                         # Sort numerically by extracting the number from the filename
                         def extract_slide_number(path):
@@ -634,15 +772,19 @@ elif st.session_state.current_page == "personalized_learning":
                         slide_files = sorted(slide_files, key=extract_slide_number)
                         st.session_state.exported_images = slide_files
                         st.session_state.slides_loaded = True
-                        st.sidebar.success(f"✅ {len(slide_files)} slides loaded")
+                        if DEV_MODE:
+                            st.sidebar.success(f"✅ {len(slide_files)} slides loaded")
                     else:
-                        st.sidebar.error("❌ No slide images found in slides directory")
+                        if DEV_MODE:
+                            st.sidebar.error("❌ No slide images found in slides directory")
                         st.session_state.slides_loaded = False
                 else:
-                    st.sidebar.error("❌ Slides directory not found")
+                    if DEV_MODE:
+                        st.sidebar.error("❌ Slides directory not found")
                     st.session_state.slides_loaded = False
             elif st.session_state.get("slides_loaded", False):
-                st.sidebar.success(f"✅ {len(st.session_state.exported_images)} slides loaded")
+                if DEV_MODE:
+                    st.sidebar.success(f"✅ {len(st.session_state.exported_images)} slides loaded")
 
 
 
@@ -689,12 +831,10 @@ elif st.session_state.current_page == "personalized_learning":
                     st.markdown(msg["content"], unsafe_allow_html=True)
 
             user_chat = st.chat_input("Ask a follow‑up question …")
-            PERSONALISED = st.session_state.get("use_personalisation", True)
             if user_chat:
                 payload = json.dumps({
                     **make_base_context(
-                        st.session_state.profile_dict if PERSONALISED else None,
-                        personalised=PERSONALISED
+                        language_code=current_language()
                     ),
                     "UserQuestion": user_chat
                 })
@@ -720,7 +860,7 @@ elif st.session_state.current_page == "personalized_learning":
                     interaction_type="chat",
                     user_input=user_chat,
                     system_response=reply.text,
-                    metadata={"slide": None, "condition": current_condition()},
+                    metadata={"slide": None, "language_code": current_language()},
                 )
                 st.rerun()
 
@@ -728,18 +868,17 @@ elif st.session_state.current_page == "personalized_learning":
             ready = (
                 st.session_state.transcription_text
                 and st.session_state.exported_images
-                and st.session_state.profile_dict
+                and st.session_state.profile_completed  # Just check if they did the survey
             )
-            if ready and selected_slide and st.button(f"Generate slide summary"):
+            if ready and selected_slide and st.button(f"Explain this slide"):
                 s_idx = int(selected_slide.split()[1]) - 1
                 img = Image.open(st.session_state.exported_images[s_idx])
 
                 prompt_json = build_prompt(
                     f"Content from {selected_slide} (see slide image).",
                     st.session_state.transcription_text,
-                    st.session_state.profile_dict,
                     selected_slide,
-                    personalised=st.session_state.get("use_personalisation", True),
+                    language_code=current_language()
                 )
                 debug_log(prompt_json)
 
@@ -749,11 +888,7 @@ elif st.session_state.current_page == "personalized_learning":
                 
                 reply = st.session_state.gemini_chat.send_message([img, prompt_json], config=content_config)
 
-                summary = create_summary_prompt(
-                    st.session_state.profile_dict,
-                    selected_slide,
-                    personalised=st.session_state.get("use_personalisation", True),
-                )
+                summary = create_summary_prompt(selected_slide)
                 st.session_state.messages.extend(
                     [
                         {"role": "user", "content": summary},
@@ -765,16 +900,17 @@ elif st.session_state.current_page == "personalized_learning":
                 # Log & persist ----------------------------------------
                 ll = get_learning_logger()
                 ll.log_interaction(
-                    interaction_type="personalized_explanation",
+                    interaction_type="slide_explanation",
                     user_input=prompt_json,
                     system_response=reply.text,
                     metadata={
                         "slide": selected_slide,
-                        "profile": st.session_state.profile_dict.get("Name", "Unknown"),
-                        "condition": current_condition(),
+                        "language_code": current_language(),
                         "session_id": ll.session_manager.session_id,
                     },
                 )
+                # Flush logs at learning completion milestone
+                ll.save_logs(force=True)
                 st.rerun()
 
             if not ready:
@@ -784,7 +920,7 @@ elif st.session_state.current_page == "personalized_learning":
                     missing_items.append("audio transcription")
                 if not st.session_state.exported_images:
                     missing_items.append("lecture slides") 
-                if not st.session_state.profile_dict:
+                if not st.session_state.profile_completed:
                     missing_items.append("student profile")
                 
                 if missing_items:
@@ -801,9 +937,6 @@ elif st.session_state.current_page == "personalized_learning":
         # ----- preview column -------------------------------------------
         with col_prev:
             st.header("Preview Files")
-            if st.session_state.transcription_text:
-                st.subheader("Transcription")
-                st.text_area("Output", st.session_state.transcription_text, height=150)
 
             if st.session_state.exported_images and selected_slide:
                 idx = int(selected_slide.split()[1]) - 1
@@ -828,7 +961,8 @@ elif st.session_state.current_page == "personalized_learning":
                 try:
                     # Use PIL to open and verify the image
                     img = Image.open(slide_path)
-                    st.image(img, caption=str(slide_path.name), use_column_width=True)
+                    caption = str(slide_path.name) if DEV_MODE else None
+                    st.image(img, caption=caption, use_column_width=True)
                 except Exception as e:
                     st.exception(e)
                     st.stop()
@@ -841,7 +975,8 @@ elif st.session_state.current_page == "personalized_learning":
                     with open(video_path, "rb") as video_file:
                         video_bytes = video_file.read()
                     st.video(video_bytes)
-                    st.caption(f"{config.course.course_title} - Full Lecture")
+                    if DEV_MODE:
+                        st.caption(f"{config.course.course_title} - Full Lecture")
                 except Exception as e:
                     if DEV_MODE:
                         st.error(f"Error loading video: {e}")
@@ -849,10 +984,6 @@ elif st.session_state.current_page == "personalized_learning":
                         st.warning("Video content is temporarily unavailable.")
             else:
                 st.info("Lecture recording will appear here when available")
-
-            if st.session_state.get("profile_text"):
-                st.subheader("Student Profile")
-                st.text_area("Profile", st.session_state.profile_text, height=150)
 
         # Navigation buttons ---------------------------------------------
         st.markdown("---")
@@ -863,7 +994,7 @@ elif st.session_state.current_page == "personalized_learning":
         with col_n:
             if st.session_state.learning_completed:
                 if st.button("Next: Knowledge Test"):
-                    log_path = get_learning_logger().save_logs()
+                    log_path = get_learning_logger().save_logs(force=True)
                     st.session_state["learning_log_file"] = log_path
                     navigate_to("knowledge_test")
             else:
@@ -880,14 +1011,14 @@ elif st.session_state.current_page == "knowledge_test":
 
     importlib.reload(testui_knowledgetest)
 
-    if not st.session_state.profile_completed:
+    if not st.session_state.profile_completed and not DEV_MODE:
         st.warning("Please complete the Student Profile Survey first.")
         if st.button("Go to Student Profile Survey"):
             navigate_to("profile_survey")
-    elif not st.session_state.learning_completed:
+    elif not st.session_state.learning_completed and not DEV_MODE:
         st.warning(f"Please complete the {LABEL.lower()} section first.")
         if st.button(f"Go to {LABEL} Learning"):
-            navigate_to("personalized_learning")
+            navigate_to("learning")
     else:
         if "score" in st.session_state:
             st.session_state.test_completed = True
@@ -896,7 +1027,7 @@ elif st.session_state.current_page == "knowledge_test":
         prev, nxt = st.columns(2)
         with prev:
             if st.button(f"Previous: {LABEL}"):
-                navigate_to("personalized_learning")
+                navigate_to("learning")
         with nxt:
             if st.session_state.test_completed:
                 if st.button("Next: User Experience Survey"):
@@ -915,15 +1046,15 @@ elif st.session_state.current_page == "ueq_survey":
 
     importlib.reload(testui_ueqsurvey)
 
-    if not st.session_state.profile_completed:
+    if not st.session_state.profile_completed and not DEV_MODE:
         st.warning("Please complete the Student Profile Survey first.")
         if st.button("Go to Student Profile Survey"):
             navigate_to("profile_survey")
-    elif not st.session_state.learning_completed:
+    elif not st.session_state.learning_completed and not DEV_MODE:
         st.warning(f"Please complete the {LABEL} Learning section first.")
         if st.button(f"Go to {LABEL} Learning"):
-            navigate_to("personalized_learning")
-    elif not st.session_state.test_completed:
+            navigate_to("learning")
+    elif not st.session_state.test_completed and not DEV_MODE:
         st.warning("Please complete the Knowledge Test first.")
         if st.button("Go to Knowledge Test"):
             navigate_to("knowledge_test")
@@ -968,10 +1099,22 @@ elif st.session_state.current_page == "completion":
     
     Your responses are being processed and uploaded securely for research analysis. This helps us improve AI-powered learning experiences for future students.
     
-    **Research Impact**: Your participation contributes to understanding how personalized AI explanations affect learning outcomes in complex scientific topics.
+    **Research Impact**: Your participation contributes to understanding whether language choice in AI-assisted learning creates educational inequalities, helping ensure fair access to AI-powered education globally.
     
     **Data Security**: All your responses are pseudonymized and stored securely according to GDPR guidelines.
     """)
+    
+    st.markdown("""
+    ### Next Steps
+    
+    Your participation is complete! Thank you for your time and dedication to this research.
+    
+    If you have any questions about the study or would like to receive information about the results, please contact the research team. Your contribution helps us understand how language affects AI-assisted learning.
+    
+    Thank you for helping advance educational equity in AI-powered learning!
+    """)
+    
+    st.markdown("---")
     
     # Process uploads in background (only once)
     if not st.session_state.get("completion_processed", False):
@@ -981,6 +1124,10 @@ elif st.session_state.current_page == "completion":
         with st.spinner("Processing your responses..."):
             try:
                 sm = get_session_manager()
+                
+                # Flush any remaining logs before final analytics
+                ll = get_learning_logger()
+                ll.save_logs(force=True)
                 
                 # Generate final analytics
                 final_analytics_path = sm.create_final_analytics()
@@ -993,6 +1140,36 @@ elif st.session_state.current_page == "completion":
                 
                 # Upload all session files
                 success = storage.upload_session_files(sm, DEV_MODE)
+                
+                # Mark session as completed in presence tracker
+                if presence:
+                    session_info = sm.get_session_info()
+                    presence.mark_session_completed(session_info["session_id"])
+                    print(f"📍 Session {session_info['session_id']} marked as completed")
+                
+                # Sync learning log and page durations to analytics database
+                from analytics_syncer import get_analytics_syncer
+                from pathlib import Path
+                analytics = get_analytics_syncer()
+                if analytics:
+                    # Sync learning log
+                    learning_log_path = Path(sm.learning_logs_dir) / sorted(
+                        [f for f in os.listdir(sm.learning_logs_dir) if f.startswith("learning_log_")]
+                    )[-1] if os.listdir(sm.learning_logs_dir) else None
+                    
+                    if learning_log_path and learning_log_path.exists():
+                        # Read the JSON version (not txt)
+                        json_log_path = Path(sm.session_dir) / "learning_logs" / "learning_interactions.json"
+                        if json_log_path.exists():
+                            analytics.sync_learning_log(session_id, json_log_path)
+                    
+                    # Sync page durations
+                    page_durations_path = Path(sm.session_dir) / "meta" / "page_durations.json"
+                    if page_durations_path.exists():
+                        analytics.sync_page_durations(session_id, page_durations_path)
+                    
+                    # Mark session as completed
+                    analytics.mark_completed(session_id)
                 
                 if success:
                     st.success("✅ Your responses have been successfully processed and uploaded!")
@@ -1016,6 +1193,16 @@ elif st.session_state.current_page == "completion":
     
     st.markdown("---")
     
+    st.markdown("""
+    ### Next Steps
+    
+    Please inform the facilitator that you have completed the session. They will guide you through the final brief interview (approximately 5 minutes).
+    
+    Thank you for your time and participation!
+    """)
+    
+    st.markdown("---")
+    
     # Action buttons
     col1, col2, col3 = st.columns([1, 2, 1])
     
@@ -1026,7 +1213,7 @@ elif st.session_state.current_page == "completion":
             # Reset all session state for new interview
             for key in ["profile_completed", "learning_completed", "test_completed", "ueq_completed", 
                        "completion_processed", "upload_completed", "responses", "messages", 
-                       "profile_text", "profile_dict", "exported_images", "transcription_text"]:
+                       "exported_images", "transcription_text"]:
                 if key in st.session_state:
                     del st.session_state[key]
             
@@ -1035,3 +1222,127 @@ elif st.session_state.current_page == "completion":
         
         if st.button("Return to Home Page", use_container_width=True):
             navigate_to("home")
+
+# ------------------------------------------------------------------------
+# PILOT SMOKE TEST (DEV MODE ONLY)
+# ------------------------------------------------------------------------
+elif st.session_state.current_page == "pilot_smoke_test":
+    if not DEV_MODE:
+        st.error("⛔ This page is only accessible in Development Mode")
+        st.info("This is a facilitator-only testing page.")
+        st.stop()
+    
+    st.title("🧪 Pilot Smoke Test")
+    st.caption("Quick validation: prompts, model, and language guardrails")
+    
+    # Get API key
+    api_key = None
+    try:
+        api_key = st.secrets["google"]["api_key"]
+    except:
+        pass
+    
+    if not api_key:
+        import os
+        api_key = os.getenv("GEMINI_API_KEY")
+    
+    if not api_key:
+        st.error("Missing GEMINI_API_KEY. Add it to .streamlit/secrets.toml under [google] or set as environment variable.")
+        st.stop()
+    
+    from constants import LANGUAGE_CODES
+    import google.genai as genai
+    from google.genai import types
+    import langid
+    import time
+    
+    client = genai.Client(api_key=api_key)
+    
+    # Inputs
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        lang = st.selectbox("Target response language", list(LANGUAGE_CODES.keys()), index=0)
+    
+    with col2:
+        prompt_mode = st.radio("Prompt source", ["Synthetic", "Transcript snippet"], horizontal=True)
+    
+    snippet = None
+    if prompt_mode == "Transcript snippet":
+        if st.session_state.get("transcription_text"):
+            snippet = st.session_state.transcription_text[:500]
+        else:
+            try:
+                transcription_file = TRANSCRIPTION_DIR / config.course.transcription_filename
+                if transcription_file.exists():
+                    snippet = transcription_file.read_text(encoding="utf-8")[:500]
+            except Exception as e:
+                st.warning(f"Could not read transcript: {e}")
+    
+    user_task = st.text_area(
+        "Task for the assistant", 
+        value="Explain the concept in one simple sentence suitable for a beginner.", 
+        height=100
+    )
+    
+    if st.button("Run Test", type="primary", use_container_width=True):
+        system = f"You MUST answer strictly in language code: {lang}. Keep response to ONE sentence."
+        content = f"{user_task}\n\n"
+        if snippet:
+            content += f"Source:\n{snippet}\n\n"
+        
+        with st.spinner("Querying model..."):
+            t0 = time.perf_counter()
+            try:
+                resp = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=content,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system,
+                        temperature=0.2,
+                        top_p=0.95,
+                    )
+                )
+                latency_ms = int((time.perf_counter() - t0) * 1000)
+                text = resp.text if hasattr(resp, 'text') else str(resp)
+                code, score = langid.classify(text)
+                pass_lang = (code == LANGUAGE_CODES[lang])
+                
+                st.markdown("---")
+                st.subheader("Model Response")
+                st.info(text or "*<empty>*")
+                
+                st.subheader("Language Verification")
+                cols = st.columns(3)
+                cols[0].metric("Expected", lang.upper())
+                cols[1].metric("Detected", code.upper())
+                cols[2].metric("Result", "✅ PASS" if pass_lang else "❌ FAIL")
+                
+                if not pass_lang:
+                    st.warning(f"⚠️ Language mismatch: expected '{lang}', detected '{code}'.")
+                else:
+                    st.success("✅ Language verification passed!")
+                    
+                st.caption(f"Response time: {latency_ms}ms")
+                
+            except Exception as e:
+                st.error(f"❌ Model call failed: {e}")
+                import traceback
+                with st.expander("Error details"):
+                    st.code(traceback.format_exc())
+    
+    # Info section
+    st.markdown("---")
+    with st.expander("ℹ️ About this test"):
+        st.markdown("""
+        **Purpose**: Verify that the model responds in the correct language before pilot sessions.
+        
+        **Test procedure**:
+        1. Select target language
+        2. Choose synthetic prompt or use actual transcript snippet
+        3. Run test
+        4. Verify langid detection shows ✅ PASS
+        
+        **Note**: This test does NOT log interactions.
+        """)
+

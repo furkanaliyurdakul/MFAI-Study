@@ -6,6 +6,9 @@ import string
 
 import streamlit as st
 
+from constants import KNOWLEDGE_JSON, UEQ_JSON, EXPERIMENT_META, INTERACTION_COUNTS
+from analytics_syncer import get_analytics_syncer
+
 # List of fake first names and last names for pseudonymization
 FIRST_NAMES = [
     "Alex",
@@ -67,15 +70,15 @@ LAST_NAMES = [
 
 
 class SessionManager:
-    """Manages session data and file organization for the personalized learning platform."""
+    """Manages session data and file organization for the multilingual learning platform."""
 
-    def __init__(self, condition: str | None = None):
+    def __init__(self, language_code: str | None = None):
         """Initialize the session manager."""
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         self.output_dir = os.path.join(self.base_dir, "output")
         os.makedirs(self.output_dir, exist_ok=True)
 
-        self.condition = condition or "personalised"  # default
+        self.language_code = language_code or "en"  # default to English
         
         # Get credential-based folder prefix if available
         self.folder_prefix = self._get_credential_folder_prefix()
@@ -93,6 +96,9 @@ class SessionManager:
             config = auth_manager.get_current_config()
             
             if config:
+                # Update language_code from credential if available
+                if hasattr(config, 'language_code'):
+                    self.language_code = config.language_code
                 return config.folder_prefix
             else:
                 return "unknown_user"
@@ -102,11 +108,13 @@ class SessionManager:
 
     def create_new_session(self):
         """Create a new session with timestamp and fake name as identifier."""
+        import secrets
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         fake_name = self._generate_fake_name()
+        suffix = secrets.token_hex(2)  # 4 hex chars
         
-        # Create credential-based session ID
-        self.session_id = f"{timestamp}_{fake_name}"
+        # Create credential-based session ID with random suffix
+        self.session_id = f"{timestamp}_{fake_name}-{suffix}"
         
         # Create credential-organized directory structure
         credential_dir = os.path.join(self.output_dir, self.folder_prefix)
@@ -128,8 +136,17 @@ class SessionManager:
         os.makedirs(self.ueq_dir, exist_ok=True)
         os.makedirs(self.analytics_dir, exist_ok=True)
 
-        with open(os.path.join(self.session_dir, "condition.txt"), "w") as f:
-            f.write(self.condition)
+        with open(os.path.join(self.session_dir, "language.txt"), "w") as f:
+            f.write(self.language_code)
+
+        # Sync to analytics database
+        analytics = get_analytics_syncer()
+        if analytics:
+            analytics.create_session_record(
+                session_id=self.session_id,
+                user_id=self.folder_prefix,
+                language_code=self.language_code
+            )
 
         return self.session_id
 
@@ -139,72 +156,94 @@ class SessionManager:
         last_name = random.choice(LAST_NAMES)
         return f"{first_name}_{last_name}"
 
-    def save_profile(self, profile_data, original_name):
-        """Save the student profile with pseudonymization.
+    def save_profile(self, profile_data: dict, original_name: str | None = None) -> str:
+        """Save only pseudonymized profile (no PII stored).
 
         Args:
             profile_data (dict): The profile data to save
-            original_name (str): The original name from the profile
+            original_name (str | None): Original name (ignored, for backwards compatibility)
 
         Returns:
             str: Path to the saved profile file
         """
-        # Create a pseudonymized version of the profile
-        pseudo_profile = profile_data.copy()
+        pseudo = dict(profile_data)
+        # Overwrite any name with a pseudonym derived from session id
+        pseudo["name"] = f"Participant_{self.session_id[-6:]}"
+        os.makedirs(self.profile_dir, exist_ok=True)
+        out = os.path.join(self.profile_dir, "pseudonymized_profile.json")
+        with open(out, "w", encoding="utf-8") as f:
+            json.dump(pseudo, f, indent=2, ensure_ascii=False)
+        
+        # Sync to analytics database
+        analytics = get_analytics_syncer()
+        if analytics:
+            from pathlib import Path
+            analytics.sync_profile(
+                session_id=self.session_id,
+                profile_data=pseudo,
+                file_path=Path(out)
+            )
+        
+        return out
 
-        # Replace the real name with the fake name from the session ID
-        fake_name = self.session_id.split("_", 1)[
-            1
-        ]  # Extract fake name from session ID
-        pseudo_profile["name"] = fake_name
+    def write_meta_json(self, filename: str, payload: dict) -> str:
+        """Write JSON metadata file to <session>/meta/ directory.
+        
+        Args:
+            filename (str): Name of the JSON file to write
+            payload (dict): Dictionary to save as JSON
+            
+        Returns:
+            str: Path to the saved file
+        """
+        meta_dir = os.path.join(self.session_dir, "meta")
+        os.makedirs(meta_dir, exist_ok=True)
+        path = os.path.join(meta_dir, filename)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=4, ensure_ascii=False)
+        return path
 
-        # Save both original and pseudonymized profiles
-        original_file_path = os.path.join(self.profile_dir, "original_profile.txt")
-        pseudo_file_path = os.path.join(self.profile_dir, "pseudonymized_profile.txt")
+    def _read_json_safe(self, path: str):
+        """Safely read JSON file, return None on failure."""
+        if not os.path.exists(path):
+            return None
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Could not load JSON from {path}: {e}")
+            return None
 
-        # Save as text files
-        with open(original_file_path, "w", encoding="utf-8") as f:
-            for key, value in profile_data.items():
-                f.write(f"{key}: {value}\n")
-
-        with open(pseudo_file_path, "w", encoding="utf-8") as f:
-            for key, value in pseudo_profile.items():
-                f.write(f"{key}: {value}\n")
-
-        # Also save as JSON for easier programmatic access
-        with open(
-            os.path.join(self.profile_dir, "original_profile.json"),
-            "w",
-            encoding="utf-8",
-        ) as f:
-            json.dump(profile_data, f, indent=4)
-
-        with open(
-            os.path.join(self.profile_dir, "pseudonymized_profile.json"),
-            "w",
-            encoding="utf-8",
-        ) as f:
-            json.dump(pseudo_profile, f, indent=4)
-
-        return pseudo_file_path
-
-    def save_knowledge_test_results(self, result_summary):
-        """Save knowledge test results to the session directory.
+    def save_knowledge_test_results(self, result_dict: dict) -> str:
+        """Save knowledge test results as JSON.
 
         Args:
-            result_summary (str): The test results summary
+            result_dict (dict): The test results as a dictionary
 
         Returns:
             str: Path to the saved results file
         """
-        filename = "knowledge_test_results.txt"
-        file_path = os.path.join(self.knowledge_test_dir, filename)
-
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(f"Condition : {self.condition}\n\n")
-            f.write(result_summary)
-
-        return file_path
+        path = os.path.join(self.knowledge_test_dir, "knowledge_test_results.json")
+        os.makedirs(self.knowledge_test_dir, exist_ok=True)
+        payload = {
+            "language_code": self.language_code,
+            "session_id": self.session_id,
+            **result_dict
+        }
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+        
+        # Sync to analytics database
+        analytics = get_analytics_syncer()
+        if analytics:
+            from pathlib import Path
+            analytics.sync_knowledge_test(
+                session_id=self.session_id,
+                results=payload,
+                file_path=Path(path)
+            )
+        
+        return path
 
     def save_interaction_analytics(self, interaction_counts):
         """Save interaction analytics for research analysis.
@@ -219,7 +258,7 @@ class SessionManager:
         file_path = os.path.join(self.analytics_dir, filename)
 
         analytics_data = {
-            "condition": self.condition,
+            "language_code": self.language_code,
             "session_id": self.session_id,
             "timestamp": datetime.datetime.now().isoformat(),
             "interaction_counts": interaction_counts,
@@ -248,23 +287,26 @@ class SessionManager:
         return file_path
 
     def save_learning_log(self, log_data):
-        """Save learning interaction logs.
+        """Save learning interaction logs in both TXT and JSON formats.
 
         Args:
             log_data (dict): The log data to save
 
         Returns:
-            str: Path to the saved log file
+            str: Path to the saved log file (txt)
         """
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"learning_log_{timestamp}.txt"
-        file_path = os.path.join(self.learning_logs_dir, filename)
+        filename_txt = f"learning_log_{timestamp}.txt"
+        filename_json = "learning_interactions.json"
+        file_path_txt = os.path.join(self.learning_logs_dir, filename_txt)
+        file_path_json = os.path.join(self.learning_logs_dir, filename_json)
 
-        with open(file_path, "w", encoding="utf-8") as f:
+        # Save as TXT (for human readability)
+        with open(file_path_txt, "w", encoding="utf-8") as f:
             # Write session information
             f.write(f"Session ID: {log_data['session_id']}\n")
             f.write(f"Fake Name: {log_data['fake_name']}\n")
-            f.write(f"Condition : {self.condition}\n\n")
+            f.write(f"Language: {self.language_code}\n\n")
             f.write(f"Timestamp: {log_data['timestamp']}\n")
             
             # Write interaction summary if available
@@ -295,8 +337,21 @@ class SessionManager:
                         f.write(f"  {key}: {value}\n")
 
                 f.write("\n")
+        
+        # Save as JSON (for analytics database)
+        with open(file_path_json, "w", encoding="utf-8") as f:
+            json.dump(log_data, f, indent=2, ensure_ascii=False)
+        
+        # Sync to analytics database
+        analytics = get_analytics_syncer()
+        if analytics:
+            from pathlib import Path
+            analytics.sync_learning_log(
+                session_id=self.session_id,
+                log_path=Path(file_path_json)
+            )
 
-        return file_path
+        return file_path_txt
 
     def save_ueq_responses(self, response_text):
         """Save UEQ survey responses.
@@ -311,42 +366,83 @@ class SessionManager:
         file_path = os.path.join(self.ueq_dir, filename)
 
         with open(file_path, "w", encoding="utf-8") as f:
-            f.write(f"Condition : {self.condition}\n\n")
+            f.write(f"Language: {self.language_code}\n\n")
             f.write(response_text)
 
         return file_path
 
-    def get_session_info(self):
-        """Get information about the current session.
+    def get_session_info(self) -> dict:
+        """Get information about the current session including baseline experiment metadata.
 
         Returns:
-            dict: Session information
+            dict: Session information with language, model, content version, etc.
         """
-        return {
-            "session_id": self.session_id,
-            "session_dir": self.session_dir,
-            "fake_name": self.session_id.split("_", 1)[1],
-            "timestamp": self.session_id.split("_", 1)[0],
-            "condition": self.condition,
+        info = {
+            "session_id": getattr(self, "session_id", None),
+            "fake_name": self.session_id.split("_", 1)[1] if hasattr(self, "session_id") else None,
+            "timestamp": self.session_id.split("_", 1)[0] if hasattr(self, "session_id") else None,
+            "session_dir": getattr(self, "session_dir", None),
+            "language_code": getattr(self, "language_code", None),
         }
+        
+        # Try to load experiment metadata if available
+        try:
+            meta_path = os.path.join(self.session_dir, "meta", "experiment_meta.json")
+            if os.path.exists(meta_path):
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                info.update({
+                    "model_name": meta.get("model"),
+                    "model_provider": meta.get("provider"),
+                    "content_version": {
+                        "slides_hash": meta.get("slides_hash"),
+                        "transcript_hash": meta.get("transcript_hash"),
+                    },
+                })
+        except Exception:
+            # Keep info minimal if meta not yet written
+            pass
+        
+        return info
 
     def save_ueq(self, answers: dict, benchmark: dict, free_text: str | None) -> str:
-        """
-        Store the raw answers (dict q→1‑7), scale means, benchmark grades
-        and an optional comment.  Returns the TXT path.
+        """Save UEQ results as JSON.
+
+        Args:
+            answers: dict of q1..q26 -> 1..7
+            benchmark: dict with 'means' and 'grades'
+            free_text: optional comment
+
+        Returns:
+            str: Path to saved file
         """
         payload = {
-            "answers": answers,  # e.g. {"q1": 5, …}
+            "answers": answers,
             "scale_means": benchmark["means"],
             "grades": benchmark["grades"],
             "comment": free_text or "",
-            "condition": self.condition,
+            "language_code": self.language_code,
+            "session_id": self.session_id,
         }
-
-        path = os.path.join(self.ueq_dir, "ueq_responses.txt")
-        with open(path, "w", encoding="utf‑8") as f:
-            json.dump(payload, f, indent=2)
-
+        path = os.path.join(self.ueq_dir, "ueq_responses.json")
+        os.makedirs(self.ueq_dir, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+        
+        # Sync to analytics database
+        analytics = get_analytics_syncer()
+        if analytics:
+            from pathlib import Path
+            ueq_data = {
+                "means": benchmark["means"],
+                "grades": benchmark["grades"]
+            }
+            analytics.sync_ueq(
+                session_id=self.session_id,
+                ueq_data=ueq_data,
+                file_path=Path(path)
+            )
+        
         return path
 
     def create_final_analytics(self):
@@ -359,7 +455,7 @@ class SessionManager:
                 "session_id": self.session_id,
                 "pseudonym": self.session_id.split("_", 1)[1],
                 "timestamp": self.session_id.split("_", 1)[0],
-                "condition": self.condition,
+                "language_code": self.language_code,
                 "session_dir": self.session_dir
             },
             "profile_data": None,
@@ -405,39 +501,39 @@ class SessionManager:
         except Exception as e:
             print(f"Could not load interaction analytics: {e}")
 
-        # Load UEQ results
+        # Load UEQ results from JSON (source of truth)
         try:
-            ueq_path = os.path.join(self.ueq_dir, "ueq_responses.txt")
-            if os.path.exists(ueq_path):
-                with open(ueq_path, "r", encoding="utf-8") as f:
-                    final_analytics["ueq_results"] = json.load(f)
+            ueq_path = os.path.join(self.ueq_dir, UEQ_JSON)
+            final_analytics["ueq_results"] = self._read_json_safe(ueq_path)
         except Exception as e:
             print(f"Could not load UEQ results: {e}")
 
-        # Load knowledge test results
+        # Load knowledge test results from JSON (source of truth)
         try:
-            if os.path.exists(self.knowledge_test_dir):
-                # Look for knowledge test files
-                knowledge_files = [f for f in os.listdir(self.knowledge_test_dir) if f.endswith('.json')]
-                if knowledge_files:
-                    # Get the most recent knowledge test file
-                    latest_knowledge_file = max(knowledge_files)
-                    knowledge_path = os.path.join(self.knowledge_test_dir, latest_knowledge_file)
-                    with open(knowledge_path, "r", encoding="utf-8") as f:
-                        final_analytics["knowledge_test_results"] = json.load(f)
+            knowledge_path = os.path.join(self.knowledge_test_dir, KNOWLEDGE_JSON)
+            final_analytics["knowledge_test_results"] = self._read_json_safe(knowledge_path)
         except Exception as e:
             print(f"Could not load knowledge test results: {e}")
 
         # Calculate additional summary metrics
         try:
-            # Learning engagement metrics
+            # Learning engagement metrics with stable ratios
             if final_analytics["interaction_analytics"]:
                 interaction_data = final_analytics["interaction_analytics"]
+                slide_count = interaction_data.get("interaction_counts", {}).get("slide_explanations", 0)
+                chat_count = interaction_data.get("interaction_counts", {}).get("manual_chat", 0)
+                total_interactions = interaction_data.get("interaction_counts", {}).get("total_user_interactions", 0)
+                
+                # Compute stable ratios with divide-by-zero guards
+                slide_to_chat_ratio = (slide_count / chat_count) if chat_count > 0 else 0
+                slide_share = (slide_count / total_interactions) if total_interactions > 0 else 0
+                
                 final_analytics["summary_metrics"]["learning_engagement"] = {
-                    "total_ai_interactions": interaction_data.get("interaction_counts", {}).get("total_user_interactions", 0),
-                    "slide_explanations": interaction_data.get("interaction_counts", {}).get("slide_explanations", 0),
-                    "manual_chat": interaction_data.get("interaction_counts", {}).get("manual_chat", 0),
-                    "slide_to_chat_ratio": interaction_data.get("engagement_metrics", {}).get("slide_to_chat_ratio", 0)
+                    "total_ai_interactions": total_interactions,
+                    "slide_explanations": slide_count,
+                    "manual_chat": chat_count,
+                    "slide_to_chat_ratio": slide_to_chat_ratio,
+                    "slide_share": slide_share
                 }
 
             # UEQ summary metrics

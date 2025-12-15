@@ -19,6 +19,17 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _extract_error(result):
+    """Extract error from result object or dict across different client versions."""
+    if result is None:
+        return None
+    if hasattr(result, "error"):
+        return getattr(result, "error")
+    if isinstance(result, dict):
+        return result.get("error")
+    return None
+
+
 class SupabaseStorage:
     """Handles uploading all original local session files to Supabase Storage."""
     
@@ -51,11 +62,11 @@ class SupabaseStorage:
             
             # Test bucket access
             bucket_list = self.supabase.storage.list_buckets()
-            existing_buckets = [bucket.name for bucket in bucket_list]
-            logger.info(f"Available buckets: {existing_buckets}")
-            print(f"📁 SUPABASE INIT: Available buckets: {existing_buckets}")
+            existing = [(b.name if hasattr(b, "name") else b.get("name")) for b in bucket_list]
+            logger.info(f"Available buckets: {existing}")
+            print(f"📁 SUPABASE INIT: Available buckets: {existing}")
             
-            bucket_exists = any(bucket.name == self.bucket_name for bucket in bucket_list)
+            bucket_exists = self.bucket_name in existing
             
             if bucket_exists:
                 logger.info(f"Bucket '{self.bucket_name}' already exists")
@@ -66,14 +77,20 @@ class SupabaseStorage:
             logger.info(f"Creating bucket '{self.bucket_name}'...")
             print(f"🔨 SUPABASE INIT: Creating bucket '{self.bucket_name}'...")
             
-            create_result = self.supabase.storage.create_bucket(
-                id=self.bucket_name,
-                name=self.bucket_name,
-                options={"public": False}  # Private bucket for interview data
-            )
+            try:
+                # New clients usually accept (name, options)
+                create_result = self.supabase.storage.create_bucket(self.bucket_name, {"public": False})
+            except TypeError:
+                # Older client signature
+                create_result = self.supabase.storage.create_bucket(
+                    id=self.bucket_name,
+                    name=self.bucket_name,
+                    options={"public": False}  # Private bucket for interview data
+                )
             
-            if hasattr(create_result, 'error') and create_result.error:
-                error_msg = f"Failed to create bucket: {create_result.error}"
+            err = _extract_error(create_result)
+            if err:
+                error_msg = f"Failed to create bucket: {err}"
                 logger.error(error_msg)
                 print(f"❌ SUPABASE INIT: {error_msg}")
                 return False
@@ -235,6 +252,12 @@ class SupabaseStorage:
                     # Calculate relative path from session directory
                     relative_path = file_path.relative_to(session_dir)
                     
+                    # Skip sensitive files
+                    SENSITIVE = {"original_profile.json", "original_profile.txt"}
+                    if file_path.name in SENSITIVE:
+                        log_to_file_and_console(f"⛔ Skipped sensitive file: {relative_path}")
+                        continue
+                    
                     # Create credential-organized Supabase path: {credential_folder}/sessions/{session_id}/{relative_path}
                     # Convert Windows paths to forward slashes for Supabase
                     supabase_path = f"{folder_prefix}/sessions/{session_id}/{relative_path}".replace("\\", "/")
@@ -275,17 +298,19 @@ class SupabaseStorage:
                                 file_options={"content-type": content_type}
                             )
                             
+                            err = _extract_error(result)
                             # If upload fails due to file existing, try update instead
-                            if hasattr(result, 'error') and result.error and "already exists" in str(result.error):
+                            if err and "already exists" in str(err).lower():
                                 log_to_file_and_console(f"File exists, trying update: {supabase_path}")
                                 result = self.supabase.storage.from_(self.bucket_name).update(
                                     path=supabase_path,
                                     file=file_data,
                                     file_options={"content-type": content_type}
                                 )
+                                err = _extract_error(result)
                             
-                            if hasattr(result, 'error') and result.error:
-                                error_msg = f"{relative_path}: {str(result.error)}"
+                            if err:
+                                error_msg = f"{relative_path}: {str(err)}"
                                 failed_uploads.append(error_msg)
                                 log_to_file_and_console(f"❌ FAILED: {error_msg}")
                             else:
