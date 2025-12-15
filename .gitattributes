@@ -1,0 +1,2 @@
+uploads/video/*.mp4 filter=lfs diff=lfs merge=lfs -text
+uploads/video/*.m4a filter=lfs diff=lfs merge=lfs -text
