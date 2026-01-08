@@ -97,27 +97,33 @@ if not st.session_state.show_review:
         help="Your assigned study language was set during enrollment and determines your experimental condition. This cannot be changed as we are researching how different languages affect learning with AI assistants. If you believe this is incorrect, please inform the research team."
     )
 
-    # Q2 - English proficiency
-    english_proficiency = st.select_slider(
-        "Q2. How would you rate your proficiency in English? *",
-        options=[1, 2, 3, 4, 5, 6, 7],
-        value=4,
-        format_func=lambda x: {
-            1: "1 - Basic",
-            2: "2 - Elementary",
-            3: "3 - Intermediate",
-            4: "4 - Upper-Intermediate",
-            5: "5 - Advanced",
-            6: "6 - Proficient",
-            7: "7 - Native-like"
-        }.get(x, str(x)),
-        key="english_proficiency",
-        help="Rate your English language ability on a scale from 1 (Basic) to 7 (Native-like)"
-    )
+    # Q2 - English proficiency (only show if study language is NOT English to avoid duplicate)
+    if current_language != "en":
+        english_proficiency = st.select_slider(
+            "Q2. How would you rate your proficiency in English? *",
+            options=[1, 2, 3, 4, 5, 6, 7],
+            value=4,
+            format_func=lambda x: {
+                1: "1 - Basic",
+                2: "2 - Elementary",
+                3: "3 - Intermediate",
+                4: "4 - Upper-Intermediate",
+                5: "5 - Advanced",
+                6: "6 - Proficient",
+                7: "7 - Native-like"
+            }.get(x, str(x)),
+            key="english_proficiency",
+            help="Rate your English language ability on a scale from 1 (Basic) to 7 (Native-like)"
+        )
+    else:
+        # For English native speakers, set English proficiency to native-like automatically
+        english_proficiency = 7
+        st.session_state["english_proficiency"] = 7
 
     # Q3 - Native language proficiency
+    question_number = "Q2" if current_language == "en" else "Q3"
     native_proficiency = st.select_slider(
-        f"Q3. How would you rate your proficiency in {language_names.get(current_language, 'your native language')}? *",
+        f"{question_number}. How would you rate your proficiency in {language_names.get(current_language, 'your native language')}? *",
         options=[1, 2, 3, 4, 5, 6, 7],
         value=7,
         format_func=lambda x: {
@@ -136,9 +142,12 @@ if not st.session_state.show_review:
     st.markdown("---")
     st.header("Section 2: Prior Knowledge of Generative AI")
 
-    # Q4 - Familiarity with GenAI tools
+    # Adjust question numbers based on whether Q2 was shown
+    q_offset = 0 if current_language == "en" else 1
+    
+    # Q4/Q3 - Familiarity with GenAI tools
     genai_familiarity = st.radio(
-        "Q4. How familiar are you with generative AI tools (e.g., ChatGPT, DALL-E)? *",
+        f"Q{3 + q_offset}. How familiar are you with generative AI tools (e.g., ChatGPT, DALL-E)? *",
         [
             "1 - Not at all familiar",
             "2 - Slightly familiar",
@@ -151,9 +160,9 @@ if not st.session_state.show_review:
         help="Rate your general awareness and exposure to generative AI tools"
     )
 
-    # Q5 - Usage frequency
+    # Q5/Q4 - Usage frequency
     genai_usage = st.radio(
-        "Q5. Have you used any generative AI tools before this study? *",
+        f"Q{4 + q_offset}. Have you used any generative AI tools before this study? *",
         [
             "Never",
             "Yes, once or rarely",
@@ -165,9 +174,9 @@ if not st.session_state.show_review:
         help="How often have you actually used tools like ChatGPT?"
     )
 
-    # Q6 - Self-assessed knowledge
+    # Q6/Q5 - Self-assessed knowledge
     genai_knowledge = st.radio(
-        "Q6. \"I know a lot about generative AI (how it works and its concepts).\" *",
+        f"Q{5 + q_offset}. \"I know a lot about generative AI (how it works and its concepts).\" *",
         [
             "1 - Strongly Disagree",
             "2 - Disagree",
@@ -180,9 +189,9 @@ if not st.session_state.show_review:
         help="Rate your agreement with this statement about your prior knowledge"
     )
 
-    # Q7 - Formal training
+    # Q7/Q6 - Formal training
     formal_ai_training = st.radio(
-        "Q7. Have you ever taken a course or formal training in artificial intelligence or machine learning? *",
+        f"Q{6 + q_offset}. Have you ever taken a course or formal training in artificial intelligence or machine learning? *",
         ["Yes", "No"],
         index=None,
         key="formal_ai_training",
@@ -192,9 +201,9 @@ if not st.session_state.show_review:
     st.markdown("---")
     st.header("Section 3: Demographics and Background")
 
-    # Q8 - Age
+    # Q8/Q7 - Age
     age = st.number_input(
-        "Q8. What is your age (in years)? *",
+        f"Q{7 + q_offset}. What is your age (in years)? *",
         min_value=16,
         max_value=100,
         value=20,
@@ -203,17 +212,17 @@ if not st.session_state.show_review:
         help="Enter your age in years"
     )
 
-    # Q9 - Gender
+    # Q9/Q8 - Gender
     gender = st.radio(
-        "Q9. What is your gender? *",
+        f"Q{8 + q_offset}. What is your gender? *",
         ["Male", "Female", "Non-binary", "Prefer not to say"],
         index=None,
         key="gender"
     )
 
-    # Q10 - Education level
+    # Q10/Q9 - Education level
     education_level = st.radio(
-        "Q10. What is your current level of education? *",
+        f"Q{9 + q_offset}. What is your current level of education? *",
         [
             "Bachelor's degree",
             "Master's degree",
@@ -234,9 +243,9 @@ if not st.session_state.show_review:
             help="E.g., High school, Professional certification, Trade school, etc."
         )
 
-    # Q11 - Field of study
+    # Q11/Q10 - Field of study
     field_of_study = st.radio(
-        "Q11. What is your field of study or professional area? *",
+        f"Q{10 + q_offset}. What is your field of study or professional area? *",
         [
             "Computer Science/IT",
             "Engineering (non-IT)",
@@ -264,9 +273,9 @@ if not st.session_state.show_review:
             help="Enter your field of study or professional area"
         )
 
-    # Q12 - Learning language preference
+    # Q12/Q11 - Learning language preference
     learning_language_preference = st.radio(
-        "Q12. Do you generally prefer to learn new material in English or your native language? *",
+        f"Q{11 + q_offset}. Do you generally prefer to learn new material in English or your native language? *",
         [
             "Primarily English",
             "Both English and native language equally",
@@ -277,9 +286,9 @@ if not st.session_state.show_review:
         help="This helps us understand your language learning preferences"
     )
 
-    # Q13 - Topic interest
+    # Q13/Q12 - Topic interest
     topic_interest = st.radio(
-        "Q13. \"I am interested in learning about generative AI.\" *",
+        f"Q{12 + q_offset}. \"I am interested in learning about generative AI.\" *",
         [
             "1 - Strongly Disagree",
             "2 - Disagree",
@@ -292,9 +301,9 @@ if not st.session_state.show_review:
         help="Rate your interest in learning about generative AI"
     )
 
-    # Q14 - LLM language usage
+    # Q14/Q13 - LLM language usage
     llm_language_usage = st.radio(
-        "Q14. When you use AI tools like ChatGPT or Gemini, which language do you primarily use? *",
+        f"Q{13 + q_offset}. When you use AI tools like ChatGPT or Gemini, which language do you primarily use? *",
         [
             "Primarily English",
             "Both English and native language equally",
@@ -305,9 +314,9 @@ if not st.session_state.show_review:
         help="This helps us understand your prior experience with AI tools in different languages"
     )
 
-    # Q15 - LLM usage frequency
+    # Q15/Q14 - LLM usage frequency
     llm_usage_frequency = st.radio(
-        "Q15. How often do you use AI tools like ChatGPT or Gemini? *",
+        f"Q{14 + q_offset}. How often do you use AI tools like ChatGPT or Gemini? *",
         [
             "Daily",
             "Weekly",
@@ -427,32 +436,37 @@ else:
     form_data = st.session_state.get("form_data", {})
     
     if form_data:
+        # Adjust question numbers based on whether Q2 was shown
+        q_offset = 0 if current_language == "en" else 1
+        
+        # Build English proficiency line only for non-English languages
+        english_prof_line = f"Q2. English Proficiency: {form_data.get('english_proficiency', 'N/A')}/7\n" if current_language != "en" else ""
+        
         response_text = f"""Participant Profile Survey Responses
 =====================================
 
 Section 1: Language Proficiency
 --------------------------------
 Q1. Native Language: {form_data.get('native_language', 'N/A')}
-Q2. English Proficiency: {form_data.get('english_proficiency', 'N/A')}/7
-Q3. Native Language Proficiency: {form_data.get('native_proficiency', 'N/A')}/7
+{english_prof_line}Q{2 if current_language == "en" else 3}. Native Language Proficiency: {form_data.get('native_proficiency', 'N/A')}/7
 
 Section 2: Prior Knowledge of Generative AI
 --------------------------------------------
-Q4. Familiarity with GenAI Tools: {form_data.get('genai_familiarity_label', 'N/A')} (coded: {form_data.get('genai_familiarity', 'N/A')})
-Q5. Previous Usage: {form_data.get('genai_usage_label', 'N/A')} (coded: {form_data.get('genai_usage', 'N/A')})
-Q6. Self-Assessed Knowledge: {form_data.get('genai_knowledge_label', 'N/A')} (coded: {form_data.get('genai_knowledge', 'N/A')})
-Q7. Formal AI Training: {form_data.get('formal_ai_training', 'N/A')}
+Q{3 + q_offset}. Familiarity with GenAI Tools: {form_data.get('genai_familiarity_label', 'N/A')} (coded: {form_data.get('genai_familiarity', 'N/A')})
+Q{4 + q_offset}. Previous Usage: {form_data.get('genai_usage_label', 'N/A')} (coded: {form_data.get('genai_usage', 'N/A')})
+Q{5 + q_offset}. Self-Assessed Knowledge: {form_data.get('genai_knowledge_label', 'N/A')} (coded: {form_data.get('genai_knowledge', 'N/A')})
+Q{6 + q_offset}. Formal AI Training: {form_data.get('formal_ai_training', 'N/A')}
 
 Section 3: Demographics and Background
 ---------------------------------------
-Q8. Age: {form_data.get('age', 'N/A')}
-Q9. Gender: {form_data.get('gender', 'N/A')}
-Q10. Education Level: {form_data.get('education_level', 'N/A')}{f" ({form_data.get('education_level_other')})" if form_data.get('education_level_other') else ''}
-Q11. Field of Study: {form_data.get('field_of_study', 'N/A')}{f" ({form_data.get('field_of_study_other')})" if form_data.get('field_of_study_other') else ''}
-Q12. Learning Language Preference: {form_data.get('learning_language_preference', 'N/A')}
-Q13. Topic Interest: {form_data.get('topic_interest_label', 'N/A')} (coded: {form_data.get('topic_interest', 'N/A')})
-Q14. LLM Language Usage: {form_data.get('llm_language_usage', 'N/A')}
-Q15. LLM Usage Frequency: {form_data.get('llm_usage_frequency', 'N/A')}
+Q{7 + q_offset}. Age: {form_data.get('age', 'N/A')}
+Q{8 + q_offset}. Gender: {form_data.get('gender', 'N/A')}
+Q{9 + q_offset}. Education Level: {form_data.get('education_level', 'N/A')}{f" ({form_data.get('education_level_other')})" if form_data.get('education_level_other') else ''}
+Q{10 + q_offset}. Field of Study: {form_data.get('field_of_study', 'N/A')}{f" ({form_data.get('field_of_study_other')})" if form_data.get('field_of_study_other') else ''}
+Q{11 + q_offset}. Learning Language Preference: {form_data.get('learning_language_preference', 'N/A')}
+Q{12 + q_offset}. Topic Interest: {form_data.get('topic_interest_label', 'N/A')} (coded: {form_data.get('topic_interest', 'N/A')})
+Q{13 + q_offset}. LLM Language Usage: {form_data.get('llm_language_usage', 'N/A')}
+Q{14 + q_offset}. LLM Usage Frequency: {form_data.get('llm_usage_frequency', 'N/A')}
 """
         
         st.text_area(

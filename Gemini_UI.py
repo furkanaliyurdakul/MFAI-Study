@@ -514,62 +514,59 @@ def main() -> None:
             "Select a Slide", slide_opts, key="selected_slide"
         )
 
-    # 5) Layout: chat (left) • previews (right) ---------------------------
-    col_chat, col_prev = st.columns([2, 1])
+    # 5) Chat section (full width) ----------------------------------------
+    st.header("LLM Chat")
+    for m in st.session_state.messages:
+        with st.chat_message(m["role"]):
+            st.markdown(m["content"], unsafe_allow_html=True)
 
-    # ----- chat --------------------------------------------------------
-    with col_chat:
-        st.header("LLM Chat")
-        for m in st.session_state.messages:
-            with st.chat_message(m["role"]):
-                st.markdown(m["content"], unsafe_allow_html=True)
+    if (
+        not st.session_state.exported_images
+        or not st.session_state.transcription_text
+    ):
+        st.info(
+            "Upload and process audio + PPT (and a profile) to enable prompting."
+        )
 
-        if (
-            not st.session_state.exported_images
-            or not st.session_state.transcription_text
-        ):
-            st.info(
-                "Upload and process audio + PPT (and a profile) to enable prompting."
-            )
+    # 6) Preview files section (below chat) -------------------------------
+    st.markdown("---")
+    st.header("Preview Files")
+    
+    if st.session_state.transcription_text:
+        st.subheader("Transcription")
+        st.text_area("Output", st.session_state.transcription_text, height=150)
 
-    # ----- previews ----------------------------------------------------
-    with col_prev:
-        st.header("Preview Files")
-        if st.session_state.transcription_text:
-            st.subheader("Transcription")
-            st.text_area("Output", st.session_state.transcription_text, height=150)
+    if st.session_state.exported_images and selected_slide:
+        idx = int(selected_slide.split()[1]) - 1
+        st.subheader("Selected Slide")
+        st.image(
+            str(st.session_state.exported_images[idx]),
+            caption=selected_slide,
+            use_container_width=True,
+        )
 
-        if st.session_state.exported_images and selected_slide:
-            idx = int(selected_slide.split()[1]) - 1
-            st.subheader("Selected Slide")
-            st.image(
-                str(st.session_state.exported_images[idx]),
-                caption=selected_slide,
-                use_container_width=True,
-            )
-
-        # Video preview functionality
+    # Video preview functionality
+    try:
+        video_path = UPLOAD_DIR_VIDEO / config.course.video_filename
+    except NameError:
+        # Fallback if UPLOAD_DIR_VIDEO isn't defined
+        video_path = Path.cwd() / "uploads" / "video" / config.course.video_filename
+    
+    if video_path.exists():
+        st.subheader("Lecture Recording")
         try:
-            video_path = UPLOAD_DIR_VIDEO / config.course.video_filename
-        except NameError:
-            # Fallback if UPLOAD_DIR_VIDEO isn't defined
-            video_path = Path.cwd() / "uploads" / "video" / config.course.video_filename
-        
-        if video_path.exists():
-            st.subheader("Lecture Recording")
-            try:
-                with open(video_path, "rb") as video_file:
-                    video_bytes = video_file.read()
-                st.video(video_bytes)
-                st.caption(f"{config.course.course_title} - Full Lecture")
-            except Exception as e:
-                st.error(f"Error loading video: {e}")
-        else:
-            st.info("Lecture recording will appear here when available")
+            with open(video_path, "rb") as video_file:
+                video_bytes = video_file.read()
+            st.video(video_bytes)
+            st.caption(f"{config.course.course_title} - Full Lecture")
+        except Exception as e:
+            st.error(f"Error loading video: {e}")
+    else:
+        st.info("Lecture recording will appear here when available")
 
-        if "profile_text" in st.session_state:
-            st.subheader("Student Profile")
-            st.text_area("Profile", st.session_state.profile_text, height=150)
+    if "profile_text" in st.session_state:
+        st.subheader("Student Profile")
+        st.text_area("Profile", st.session_state.profile_text, height=150)
 
 
 if __name__ == "__main__":
