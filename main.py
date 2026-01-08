@@ -844,47 +844,13 @@ The AI assistant has access to all {config.course.total_slides} slides and the f
         else:
             selected_slide = None
 
-        # Chat section (full width) ---------------------------------------
+        # Chat messages section ---------------------------------------
         st.header("LLM Chat")
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"], unsafe_allow_html=True)
 
-        user_chat = st.chat_input("Ask a follow‑up question …")
-        if user_chat:
-            payload = json.dumps({
-                **make_base_context(
-                    language_code=current_language()
-                ),
-                "UserQuestion": user_chat
-            })
-
-            #reply = st.session_state.gemini_chat.send_message(payload)
-            
-            # Create thinking config step by step for debugging
-            thinking_config = types.ThinkingConfig(includeThoughts=True)
-            content_config = types.GenerateContentConfig(thinking_config=thinking_config)
-            
-            reply = st.session_state.gemini_chat.send_message(
-                payload,
-                config=content_config
-            )
-            
-            st.session_state.messages.extend(
-                [
-                    {"role": "user", "content": user_chat},
-                    {"role": "assistant", "content": reply.text},
-                ]
-            )
-            get_learning_logger().log_interaction(
-                interaction_type="chat",
-                user_input=user_chat,
-                system_response=reply.text,
-                metadata={"slide": None, "language_code": current_language()},
-            )
-            st.rerun()
-
-        # Generate explanation button --------------------------------
+        # Generate explanation button (placed after chat history) --------------------------------
         ready = (
             st.session_state.transcription_text
             and st.session_state.exported_images
@@ -954,56 +920,95 @@ The AI assistant has access to all {config.course.total_slides} slides and the f
             else:
                 st.info("⏳ Preparing explanation generator...")
 
-        # Preview files section (below chat) ------------------------------
+        # Chat input section ---------------------------------------
+        user_chat = st.chat_input("Ask a follow‑up question …")
+        if user_chat:
+            payload = json.dumps({
+                **make_base_context(
+                    language_code=current_language()
+                ),
+                "UserQuestion": user_chat
+            })
+
+            #reply = st.session_state.gemini_chat.send_message(payload)
+            
+            # Create thinking config step by step for debugging
+            thinking_config = types.ThinkingConfig(includeThoughts=True)
+            content_config = types.GenerateContentConfig(thinking_config=thinking_config)
+            
+            reply = st.session_state.gemini_chat.send_message(
+                payload,
+                config=content_config
+            )
+            
+            st.session_state.messages.extend(
+                [
+                    {"role": "user", "content": user_chat},
+                    {"role": "assistant", "content": reply.text},
+                ]
+            )
+            get_learning_logger().log_interaction(
+                interaction_type="chat",
+                user_input=user_chat,
+                system_response=reply.text,
+                metadata={"slide": None, "language_code": current_language()},
+            )
+            st.rerun()
+
+        # Preview files section (constrained width) ------------------------------
         st.markdown("---")
         st.header("Preview Files")
+        
+        # Center preview content with constrained width (60% of page)
+        col_left, col_center, col_right = st.columns([1, 3, 1])
+        
+        with col_center:
+            if st.session_state.exported_images and selected_slide:
+                idx = int(selected_slide.split()[1]) - 1
+                
+                from pathlib import Path
+                slide_path = st.session_state.exported_images[idx]
+                
+                # Convert to Path object if it isn't already
+                if not isinstance(slide_path, Path):
+                    slide_path = Path(slide_path)
+                
+                # Check if file exists
+                if not slide_path.exists():
+                    if DEV_MODE:
+                        st.error(f"Slide not found: {slide_path.resolve()}")
+                        st.write(f"Current working directory: {Path.cwd()}")
+                        st.write(f"Looking for: {slide_path}")
+                    else:
+                        st.error("Slide content is currently unavailable.")
+                    st.stop()
+                
+                try:
+                    # Use PIL to open and verify the image
+                    img = Image.open(slide_path)
+                    caption = str(slide_path.name) if DEV_MODE else None
+                    st.image(img, caption=caption, use_column_width=True)
+                except Exception as e:
+                    st.exception(e)
+                    st.stop()
 
-        if st.session_state.exported_images and selected_slide:
-            idx = int(selected_slide.split()[1]) - 1
-            
-            from pathlib import Path
-            slide_path = st.session_state.exported_images[idx]
-            
-            # Convert to Path object if it isn't already
-            if not isinstance(slide_path, Path):
-                slide_path = Path(slide_path)
-            
-            # Check if file exists
-            if not slide_path.exists():
-                if DEV_MODE:
-                    st.error(f"Slide not found: {slide_path.resolve()}")
-                    st.write(f"Current working directory: {Path.cwd()}")
-                    st.write(f"Looking for: {slide_path}")
-                else:
-                    st.error("Slide content is currently unavailable.")
-                st.stop()
-            
-            try:
-                # Use PIL to open and verify the image
-                img = Image.open(slide_path)
-                caption = str(slide_path.name) if DEV_MODE else None
-                st.image(img, caption=caption, use_column_width=True)
-            except Exception as e:
-                st.exception(e)
-                st.stop()
-
-        # Video preview functionality
-        video_path = UPLOAD_DIR_VIDEO / config.course.video_filename
-        if video_path.exists():
-            st.subheader("Lecture Recording")
-            try:
-                with open(video_path, "rb") as video_file:
-                    video_bytes = video_file.read()
-                st.video(video_bytes)
-                if DEV_MODE:
-                    st.caption(f"{config.course.course_title} - Full Lecture")
-            except Exception as e:
-                if DEV_MODE:
-                    st.error(f"Error loading video: {e}")
-                else:
-                    st.warning("Video content is temporarily unavailable.")
-        else:
-            st.info("Lecture recording will appear here when available")
+            # Video preview functionality
+            video_path = UPLOAD_DIR_VIDEO / config.course.video_filename
+            if video_path.exists():
+                st.subheader("Lecture Recording")
+                try:
+                    with open(video_path, "rb") as video_file:
+                        video_bytes = video_file.read()
+                    st.video(video_bytes)
+                    if DEV_MODE:
+                        st.caption(f"{config.course.course_title} - Full Lecture")
+                except Exception as e:
+                    if DEV_MODE:
+                        st.error(f"Error loading video: {e}")
+                    else:
+                        st.warning("Video content is temporarily unavailable.")
+            else:
+                st.info("Lecture recording will appear here when available")
 
         # Navigation buttons ---------------------------------------------
         st.markdown("---")
