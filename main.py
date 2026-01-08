@@ -850,7 +850,42 @@ The AI assistant has access to all {config.course.total_slides} slides and the f
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"], unsafe_allow_html=True)
 
-        # Generate explanation button (placed after chat history) --------------------------------
+        # Chat input section (placed right after messages) ---------------------------------------
+        user_chat = st.chat_input("Ask a follow‑up question …")
+        if user_chat:
+            payload = json.dumps({
+                **make_base_context(
+                    language_code=current_language()
+                ),
+                "UserQuestion": user_chat
+            })
+
+            #reply = st.session_state.gemini_chat.send_message(payload)
+            
+            # Create thinking config step by step for debugging
+            thinking_config = types.ThinkingConfig(includeThoughts=True)
+            content_config = types.GenerateContentConfig(thinking_config=thinking_config)
+            
+            reply = st.session_state.gemini_chat.send_message(
+                payload,
+                config=content_config
+            )
+            
+            st.session_state.messages.extend(
+                [
+                    {"role": "user", "content": user_chat},
+                    {"role": "assistant", "content": reply.text},
+                ]
+            )
+            get_learning_logger().log_interaction(
+                interaction_type="chat",
+                user_input=user_chat,
+                system_response=reply.text,
+                metadata={"slide": None, "language_code": current_language()},
+            )
+            st.rerun()
+
+        # Generate explanation button (placed after chat input) --------------------------------
         ready = (
             st.session_state.transcription_text
             and st.session_state.exported_images
@@ -919,41 +954,6 @@ The AI assistant has access to all {config.course.total_slides} slides and the f
                         st.info("⏳ Loading course content...")
             else:
                 st.info("⏳ Preparing explanation generator...")
-
-        # Chat input section ---------------------------------------
-        user_chat = st.chat_input("Ask a follow‑up question …")
-        if user_chat:
-            payload = json.dumps({
-                **make_base_context(
-                    language_code=current_language()
-                ),
-                "UserQuestion": user_chat
-            })
-
-            #reply = st.session_state.gemini_chat.send_message(payload)
-            
-            # Create thinking config step by step for debugging
-            thinking_config = types.ThinkingConfig(includeThoughts=True)
-            content_config = types.GenerateContentConfig(thinking_config=thinking_config)
-            
-            reply = st.session_state.gemini_chat.send_message(
-                payload,
-                config=content_config
-            )
-            
-            st.session_state.messages.extend(
-                [
-                    {"role": "user", "content": user_chat},
-                    {"role": "assistant", "content": reply.text},
-                ]
-            )
-            get_learning_logger().log_interaction(
-                interaction_type="chat",
-                user_input=user_chat,
-                system_response=reply.text,
-                metadata={"slide": None, "language_code": current_language()},
-            )
-            st.rerun()
 
         # Preview files section (constrained width) ------------------------------
         st.markdown("---")
