@@ -74,6 +74,10 @@ def ensure_session_state_initialized():
         "ueq_completed",
     ):
         st.session_state.setdefault(key, False if key != "current_page" else "home")
+    
+    # Track previous page for scroll-to-top detection
+    st.session_state.setdefault("previous_page", None)
+    
     if DEBUG_MODE:
         print("🔧 DEBUG: Session state initialization completed")
 
@@ -282,6 +286,26 @@ if presence and credential_config and "language_code" in st.session_state and st
     )
 else:
     print(f"⚠️ Heartbeat NOT injected - presence: {presence is not None}, credential: {credential_config is not None}, language: {'language_code' in st.session_state}")
+
+# ── Scroll to Top on Page Navigation ──────────────────────────
+# Only scroll when user actually navigates to a different page, not on every rerun
+current_page = st.session_state.get("current_page", "home")
+previous_page = st.session_state.get("previous_page", None)
+
+if current_page != previous_page:
+    # Page has changed - scroll to top
+    st.markdown(
+        """
+        <script>
+            window.scrollTo(0, 0);
+        </script>
+        """,
+        unsafe_allow_html=True
+    )
+    # Update previous page tracker
+    st.session_state["previous_page"] = current_page
+    if DEBUG_MODE:
+        print(f"🔧 DEBUG: Page changed from '{previous_page}' to '{current_page}' - scrolling to top")
 
 # Yiman = AIzaSyCdNS08cjO_lvj35Ytvs8szbUmeAdo4aIA
 # Furkan Ali = AIzaSyArkmZSrZaeWQSfL9CFkQ0jXaEe4D9sMEQ
