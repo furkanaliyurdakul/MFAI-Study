@@ -614,8 +614,14 @@ elif st.session_state.current_page == "learning":
         
         # --- header ------------------------------------------------------
         st.title(f"AI Learning Assistant")
-        st.markdown(
-            f"""
+        
+        # Create main column layout (content on left, minimal on right)
+        col_main, col_spacer = st.columns([4, 1])
+        
+        # Row 1: Explanation text (instructions)
+        with col_main:
+            st.markdown(
+                f"""
 Interact with the AI assistant to explore the course materials. You can ask questions about the slides or request explanations of concepts covered in the lecture.
 
 ### How to Use This Section
@@ -627,7 +633,10 @@ You can interact with the AI assistant in two ways:
 
 The AI assistant has access to all {config.course.total_slides} slides and the full lecture transcription. **Use the AI assistant naturally, as you would in your everyday learning.** There is no minimum or maximum number of interactions required – explore at your own pace.
 """
-        )
+            )
+        
+        with col_spacer:
+            st.write("")  # Minimal content
 
         #genai.configure(api_key=API_KEY)
         client = genai.Client(  api_key=API_KEY# picks up GEMINI_API_KEY env automatically
@@ -844,125 +853,130 @@ The AI assistant has access to all {config.course.total_slides} slides and the f
         else:
             selected_slide = None
 
-        # Chat messages section ---------------------------------------
-        st.header("LLM Chat")
-        for msg in st.session_state.messages:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"], unsafe_allow_html=True)
+        # Row 2: Chat messages, input, and explain button
+        col_main, col_spacer = st.columns([4, 1])
+        
+        with col_main:
+            st.header("LLM Chat")
+            for msg in st.session_state.messages:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"], unsafe_allow_html=True)
 
-        # Chat input section (placed right after messages) ---------------------------------------
-        user_chat = st.chat_input("Ask a follow‑up question …")
-        if user_chat:
-            payload = json.dumps({
-                **make_base_context(
+            # Chat input section (placed right after messages) ---------------------------------------
+            user_chat = st.chat_input("Ask a follow‑up question …")
+            if user_chat:
+                payload = json.dumps({
+                    **make_base_context(
+                        language_code=current_language()
+                    ),
+                    "UserQuestion": user_chat
+                })
+
+                #reply = st.session_state.gemini_chat.send_message(payload)
+                
+                # Create thinking config step by step for debugging
+                thinking_config = types.ThinkingConfig(includeThoughts=True)
+                content_config = types.GenerateContentConfig(thinking_config=thinking_config)
+                
+                reply = st.session_state.gemini_chat.send_message(
+                    payload,
+                    config=content_config
+                )
+                
+                st.session_state.messages.extend(
+                    [
+                        {"role": "user", "content": user_chat},
+                        {"role": "assistant", "content": reply.text},
+                    ]
+                )
+                get_learning_logger().log_interaction(
+                    interaction_type="chat",
+                    user_input=user_chat,
+                    system_response=reply.text,
+                    metadata={"slide": None, "language_code": current_language()},
+                )
+                st.rerun()
+
+            # Generate explanation button (placed after chat input) --------------------------------
+            ready = (
+                st.session_state.transcription_text
+                and st.session_state.exported_images
+                and st.session_state.profile_completed  # Just check if they did the survey
+            )
+            if ready and selected_slide and st.button(f"Explain this slide"):
+                s_idx = int(selected_slide.split()[1]) - 1
+                img = Image.open(st.session_state.exported_images[s_idx])
+
+                prompt_json = build_prompt(
+                    f"Content from {selected_slide} (see slide image).",
+                    st.session_state.transcription_text,
+                    selected_slide,
                     language_code=current_language()
-                ),
-                "UserQuestion": user_chat
-            })
+                )
+                debug_log(prompt_json)
 
-            #reply = st.session_state.gemini_chat.send_message(payload)
-            
-            # Create thinking config step by step for debugging
-            thinking_config = types.ThinkingConfig(includeThoughts=True)
-            content_config = types.GenerateContentConfig(thinking_config=thinking_config)
-            
-            reply = st.session_state.gemini_chat.send_message(
-                payload,
-                config=content_config
-            )
-            
-            st.session_state.messages.extend(
-                [
-                    {"role": "user", "content": user_chat},
-                    {"role": "assistant", "content": reply.text},
-                ]
-            )
-            get_learning_logger().log_interaction(
-                interaction_type="chat",
-                user_input=user_chat,
-                system_response=reply.text,
-                metadata={"slide": None, "language_code": current_language()},
-            )
-            st.rerun()
+                # Create thinking config step by step for debugging
+                thinking_config = types.ThinkingConfig(includeThoughts=True)
+                content_config = types.GenerateContentConfig(thinking_config=thinking_config)
+                
+                reply = st.session_state.gemini_chat.send_message([img, prompt_json], config=content_config)
 
-        # Generate explanation button (placed after chat input) --------------------------------
-        ready = (
-            st.session_state.transcription_text
-            and st.session_state.exported_images
-            and st.session_state.profile_completed  # Just check if they did the survey
-        )
-        if ready and selected_slide and st.button(f"Explain this slide"):
-            s_idx = int(selected_slide.split()[1]) - 1
-            img = Image.open(st.session_state.exported_images[s_idx])
+                summary = create_summary_prompt(selected_slide)
+                st.session_state.messages.extend(
+                    [
+                        {"role": "user", "content": summary},
+                        {"role": "assistant", "content": reply.text},
+                    ]
+                )
+                st.session_state.learning_completed = True
 
-            prompt_json = build_prompt(
-                f"Content from {selected_slide} (see slide image).",
-                st.session_state.transcription_text,
-                selected_slide,
-                language_code=current_language()
-            )
-            debug_log(prompt_json)
+                # Log & persist ----------------------------------------
+                ll = get_learning_logger()
+                ll.log_interaction(
+                    interaction_type="slide_explanation",
+                    user_input=prompt_json,
+                    system_response=reply.text,
+                    metadata={
+                        "slide": selected_slide,
+                        "language_code": current_language(),
+                        "session_id": ll.session_manager.session_id,
+                    },
+                )
+                # Flush logs at learning completion milestone
+                ll.save_logs(force=True)
+                st.rerun()
 
-            # Create thinking config step by step for debugging
-            thinking_config = types.ThinkingConfig(includeThoughts=True)
-            content_config = types.GenerateContentConfig(thinking_config=thinking_config)
-            
-            reply = st.session_state.gemini_chat.send_message([img, prompt_json], config=content_config)
-
-            summary = create_summary_prompt(selected_slide)
-            st.session_state.messages.extend(
-                [
-                    {"role": "user", "content": summary},
-                    {"role": "assistant", "content": reply.text},
-                ]
-            )
-            st.session_state.learning_completed = True
-
-            # Log & persist ----------------------------------------
-            ll = get_learning_logger()
-            ll.log_interaction(
-                interaction_type="slide_explanation",
-                user_input=prompt_json,
-                system_response=reply.text,
-                metadata={
-                    "slide": selected_slide,
-                    "language_code": current_language(),
-                    "session_id": ll.session_manager.session_id,
-                },
-            )
-            # Flush logs at learning completion milestone
-            ll.save_logs(force=True)
-            st.rerun()
-
-        if not ready:
-            # Check what's missing and provide specific guidance
-            missing_items = []
-            if not st.session_state.transcription_text:
-                missing_items.append("audio transcription")
-            if not st.session_state.exported_images:
-                missing_items.append("lecture slides") 
-            if not st.session_state.profile_completed:
-                missing_items.append("student profile")
-            
-            if missing_items:
-                if "student profile" in missing_items and len(missing_items) == 1:
-                    st.info("Complete the Student Profile Survey first to enable explanation generation.")
-                else:
-                    if DEV_MODE:
-                        st.info(f"⏳ Loading course content... Missing: {', '.join(missing_items)}")
+            if not ready:
+                # Check what's missing and provide specific guidance
+                missing_items = []
+                if not st.session_state.transcription_text:
+                    missing_items.append("audio transcription")
+                if not st.session_state.exported_images:
+                    missing_items.append("lecture slides") 
+                if not st.session_state.profile_completed:
+                    missing_items.append("student profile")
+                
+                if missing_items:
+                    if "student profile" in missing_items and len(missing_items) == 1:
+                        st.info("Complete the Student Profile Survey first to enable explanation generation.")
                     else:
-                        st.info("⏳ Loading course content...")
-            else:
-                st.info("⏳ Preparing explanation generator...")
+                        if DEV_MODE:
+                            st.info(f"⏳ Loading course content... Missing: {', '.join(missing_items)}")
+                        else:
+                            st.info("⏳ Loading course content...")
+                else:
+                    st.info("⏳ Preparing explanation generator...")
+        
+        with col_spacer:
+            st.write("")  # Minimal content
 
-        # Preview files section (constrained width) ------------------------------
-        st.markdown("---")
-        st.header("Preview Files")
+        # Row 3: Preview files section
+        col_main, col_spacer = st.columns([4, 1])
         
-        # Center preview content with constrained width (60% of page)
-        col_left, col_center, col_right = st.columns([1, 3, 1])
-        
-        with col_center:
+        with col_main:
+            st.markdown("---")
+            st.header("Preview Files")
+            
             if st.session_state.exported_images and selected_slide:
                 idx = int(selected_slide.split()[1]) - 1
                 
@@ -1009,6 +1023,9 @@ The AI assistant has access to all {config.course.total_slides} slides and the f
                         st.warning("Video content is temporarily unavailable.")
             else:
                 st.info("Lecture recording will appear here when available")
+        
+        with col_spacer:
+            st.write("")  # Minimal content
 
         # Navigation buttons ---------------------------------------------
         st.markdown("---")
