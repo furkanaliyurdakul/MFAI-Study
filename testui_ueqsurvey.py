@@ -14,15 +14,11 @@ def evaluate_ueq(raw: dict) -> dict:
     """Evaluate UEQ scores based on the raw responses.
     Returns dictionary with 'means' and 'grades' keys for session_manager.save_ueq().
     """
-    # Items where the POSITIVE word is on the LEFT in the UI → reverse (1..7 -> 7..1)
-    REVERSE = {3, 4, 5, 9, 10, 12, 17, 18, 19, 21, 23, 24}
-    
-    def orient_pos(v: int, idx: int) -> int:
-        """Orient value so 7 is always positive."""
-        return 8 - v if idx in REVERSE else v  # still 1..7, but oriented so 7 is positive
+    # All questions now have consistent orientation: negative on left (1), positive on right (7)
+    # No reversal needed since UI presentation matches calculation expectation
     
     def to_interval(v: int) -> int:
-        """Convert 1-7 (positive-oriented) to −3..+3."""
+        """Convert 1-7 scale to −3..+3 interval."""
         return v - 4  # 1..7 -> -3..+3
     
     # UEQ scale definitions
@@ -61,8 +57,7 @@ def evaluate_ueq(raw: dict) -> dict:
         vals = []
         for n in items:
             v_raw = raw[f"q{n}"]
-            v_pos = orient_pos(v_raw, n)
-            val = to_interval(v_pos)
+            val = to_interval(v_raw)  # Direct conversion - all scales now consistent
             vals.append(val)
         m = sum(vals) / len(vals)
         means[scale] = m
@@ -74,13 +69,19 @@ st.title("User Experience Questionnaire")
 
 st.markdown(
     """
-This questionnaire evaluates your experience with the AI learning assistant and platform. For each item, select the point on the scale that best represents your impression.
+This questionnaire evaluates **your experience with the AI learning assistant** (the chat interface and AI responses you just used).
+
+**What to focus on when answering:**
+- The AI assistant's explanations and conversation
+- How easy it was to interact with the AI
+- The quality and helpfulness of the AI's responses
+- Your overall learning experience with the AI
+
+For each item, select the point on the scale that best represents your impression. The scale goes from **negative attributes on the left** to **positive attributes on the right**.
 
 Please decide spontaneously. Don't think too long about your decision to make sure that you convey your original impression.
 
-Sometimes you may not be completely sure about your agreement with a particular attribute or you may find that the attribute does not apply completely to the particular product.
-
-Nevertheless, please tick a circle in every line. It is your personal opinion that counts.
+Sometimes you may not be completely sure about your agreement with a particular attribute or you may find that the attribute does not apply completely. Nevertheless, please tick a circle in every line. It is your personal opinion that counts.
 
 Please remember: there is no wrong or right answer!
 """
@@ -113,29 +114,29 @@ st.markdown(
 questions = [
     {"number": 1, "left": "annoying", "right": "enjoyable"},
     {"number": 2, "left": "not understandable", "right": "understandable"},
-    {"number": 3, "left": "creative", "right": "dull"},
-    {"number": 4, "left": "easy to learn", "right": "difficult to learn"},
-    {"number": 5, "left": "valuable", "right": "inferior"},
+    {"number": 3, "left": "dull", "right": "creative"},
+    {"number": 4, "left": "difficult to learn", "right": "easy to learn"},
+    {"number": 5, "left": "inferior", "right": "valuable"},
     {"number": 6, "left": "boring", "right": "exciting"},
     {"number": 7, "left": "not interesting", "right": "interesting"},
     {"number": 8, "left": "unpredictable", "right": "predictable"},
-    {"number": 9, "left": "fast", "right": "slow"},
-    {"number": 10, "left": "inventive", "right": "conventional"},
+    {"number": 9, "left": "slow", "right": "fast"},
+    {"number": 10, "left": "conventional", "right": "inventive"},
     {"number": 11, "left": "obstructive", "right": "supportive"},
-    {"number": 12, "left": "good", "right": "bad"},
+    {"number": 12, "left": "bad", "right": "good"},
     {"number": 13, "left": "complicated", "right": "easy"},
     {"number": 14, "left": "unlikable", "right": "pleasing"},
     {"number": 15, "left": "usual", "right": "leading edge"},
     {"number": 16, "left": "unpleasant", "right": "pleasant"},
-    {"number": 17, "left": "secure", "right": "not secure"},
-    {"number": 18, "left": "motivating", "right": "demotivating"},
-    {"number": 19, "left": "meets expectations", "right": "does not meet expectations"},
+    {"number": 17, "left": "not secure", "right": "secure"},
+    {"number": 18, "left": "demotivating", "right": "motivating"},
+    {"number": 19, "left": "does not meet expectations", "right": "meets expectations"},
     {"number": 20, "left": "inefficient", "right": "efficient"},
-    {"number": 21, "left": "clear", "right": "confusing"},
+    {"number": 21, "left": "confusing", "right": "clear"},
     {"number": 22, "left": "impractical", "right": "practical"},
-    {"number": 23, "left": "organized", "right": "cluttered"},
-    {"number": 24, "left": "attractive", "right": "unattractive"},
-    {"number": 25, "left": "friendly", "right": "unfriendly"},
+    {"number": 23, "left": "cluttered", "right": "organized"},
+    {"number": 24, "left": "unattractive", "right": "attractive"},
+    {"number": 25, "left": "unfriendly", "right": "friendly"},
     {"number": 26, "left": "conservative", "right": "innovative"},
 ]
 
