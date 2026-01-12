@@ -835,7 +835,7 @@ elif st.session_state.current_page == "learning":
             if not st.session_state.get("exported_images"):
                 slides_dir = UPLOAD_DIR_PPT / config.course.slides_directory
                 if slides_dir.exists():
-                    slide_files = list(slides_dir.glob(config.course.slide_filename_pattern))
+                    slide_files = list(slides_dir.glob("Slide_* Genetics of Cancer.jpg"))
                     if slide_files:
                         # Sort numerically by extracting the number from the filename
                         def extract_slide_number(path):
@@ -1383,7 +1383,12 @@ elif st.session_state.current_page == "pilot_smoke_test":
     )
     
     if st.button("Run Test", type="primary", use_container_width=True):
-        system = f"You MUST answer strictly in language code: {lang}. Keep response to ONE sentence."
+        # Use the new multilingual prompt system
+        from prompt_translations import get_prompts
+        prompts = get_prompts(lang)
+        
+        # System instruction now in target language
+        system = prompts["system_chat"]
         content = f"{user_task}\n\n"
         if snippet:
             content += f"Source:\n{snippet}\n\n"
@@ -1409,6 +1414,10 @@ elif st.session_state.current_page == "pilot_smoke_test":
                 st.subheader("Model Response")
                 st.info(text or "*<empty>*")
                 
+                # Show the system prompt used
+                with st.expander("🔍 View System Prompt (in target language)"):
+                    st.code(system, language="text")
+                
                 st.subheader("Language Verification")
                 cols = st.columns(3)
                 cols[0].metric("Expected", lang.upper())
@@ -1432,14 +1441,21 @@ elif st.session_state.current_page == "pilot_smoke_test":
     st.markdown("---")
     with st.expander("ℹ️ About this test"):
         st.markdown("""
-        **Purpose**: Verify that the model responds in the correct language before pilot sessions.
+        **Purpose**: Verify multilingual prompts work correctly before pilot sessions.
+        
+        **What's tested**:
+        - System prompts are in the target language (not English)
+        - Model responds in correct language
+        - Language detection verifies output
         
         **Test procedure**:
         1. Select target language
         2. Choose synthetic prompt or use actual transcript snippet
         3. Run test
-        4. Verify langid detection shows ✅ PASS
+        4. Check system prompt is in target language (expand to view)
+        5. Verify langid detection shows ✅ PASS
         
-        **Note**: This test does NOT log interactions.
+        **Note**: This test uses the actual multilingual prompt system from `prompt_translations.py`.
         """)
+
 
