@@ -67,6 +67,31 @@ def evaluate_ueq(raw: dict) -> dict:
 
 st.title("User Experience Questionnaire")
 
+# Get language name for display
+language_name = {
+    "en": "English",
+    "de": "German", 
+    "nl": "Dutch",
+    "tr": "Turkish",
+    "sq": "Albanian",
+    "hi": "Hindi"
+}.get(session_info_global.get("language_code", "en"), "English")
+
+st.info(
+    f"""🌍 **Context for your responses**  
+    
+You just used an AI learning assistant in **{language_name}**. As you answer these questions, 
+    please reflect on your experience using the AI in {language_name} compared to:
+    
+    • Your typical experience with AI tools (often in English)
+    • How you normally learn new technical material
+    • What felt different or similar about learning in {language_name}
+    
+    This comparison is valuable for our research on language effects in AI-assisted learning.
+    """,
+    icon="💭"
+)
+
 st.markdown(
     """
 This questionnaire evaluates **your experience with the AI learning assistant** (the chat interface and AI responses you just used).
@@ -74,7 +99,7 @@ This questionnaire evaluates **your experience with the AI learning assistant** 
 **What to focus on when answering:**
 - The AI assistant's explanations and conversation
 - How easy it was to interact with the AI
-- The quality and helpfulness of the AI's responses
+- The quality and helpfulness of the AI's responses  
 - Your overall learning experience with the AI
 
 For each item, select the point on the scale that best represents your impression. The scale goes from **negative attributes on the left** to **positive attributes on the right**.
