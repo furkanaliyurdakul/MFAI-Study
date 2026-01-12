@@ -401,13 +401,19 @@ def load_course_content() -> None:
         if slide_files:
             st.session_state.exported_images = slide_files
             debug_log(f"Loaded {len(slide_files)} {config.course.course_title} slides")
+        else:
+            debug_log(f"⚠️ No slides found in {slides_dir}")
     
     # Load course transcription (cached)
     if not st.session_state.get("transcription_text"):
         transcription_file = TRANSCRIPTION_DIR / config.course.transcription_filename
+        debug_log(f"Attempting to load transcription from: {transcription_file}")
         transcript = _load_transcript_cached(str(transcription_file))
         if transcript:
             st.session_state.transcription_text = transcript
+            debug_log(f"✅ Loaded {config.course.course_title} transcription ({len(transcript)} chars)")
+        else:
+            debug_log(f"⚠️ Transcription not found or empty at {transcription_file}")
             debug_log(f"Loaded {config.course.course_title} transcription from {transcription_file.name}")
     
     # Set default slide selection
