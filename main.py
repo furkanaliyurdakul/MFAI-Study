@@ -835,7 +835,7 @@ elif st.session_state.current_page == "learning":
             if not st.session_state.get("exported_images"):
                 slides_dir = UPLOAD_DIR_PPT / config.course.slides_directory
                 if slides_dir.exists():
-                    slide_files = list(slides_dir.glob("Slide_* Genetics of Cancer.jpg"))
+                    slide_files = list(slides_dir.glob(config.course.slide_filename_pattern))
                     if slide_files:
                         # Sort numerically by extracting the number from the filename
                         def extract_slide_number(path):
