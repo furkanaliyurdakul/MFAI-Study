@@ -1,12 +1,7 @@
 import streamlit as st
 
-FAST_TEST_MODE = st.session_state.get("fast_test_mode")
-
-# Get current language from session state
-current_language = st.session_state.get("language_code", "en")
-
-# Language names dictionary
-language_names = {
+# Language names dictionary (module-level constant)
+LANGUAGE_NAMES = {
     "en": "English",
     "de": "German",
     "nl": "Dutch",
@@ -14,6 +9,17 @@ language_names = {
     "sq": "Albanian",
     "hi": "Hindi"
 }
+
+def get_get_current_language()():
+    """Get current language from session state."""
+    return st.session_state.get("language_code", "en")
+
+def get_fast_test_mode():
+    """Get fast test mode flag."""
+    return st.session_state.get("fast_test_mode", False)
+
+# Module-level flags (evaluated once when first accessed)
+FAST_TEST_MODE = get_fast_test_mode()
 
 # Initialize session state for form submission
 if "show_review" not in st.session_state:
@@ -92,14 +98,14 @@ if not st.session_state.show_review:
     # Q1 - Native language (pre-filled from credentials)
     st.text_input(
         "Q1. What is your native language?",
-        value=language_names.get(current_language, "English"),
+        value=LANGUAGE_NAMES.get(get_get_current_language()(), "English"),
         disabled=True,
         key="native_language_display",
         help="Your assigned study language was set during enrollment and determines your experimental condition. This cannot be changed as we are researching how different languages affect learning with AI assistants. If you believe this is incorrect, please inform the research team."
     )
 
     # Q2 - English proficiency (only show if study language is NOT English to avoid duplicate)
-    if current_language != "en":
+    if get_current_language() != "en":
         english_proficiency = st.select_slider(
             "Q2. How would you rate your proficiency in English? *",
             options=[1, 2, 3, 4, 5, 6, 7],
@@ -122,9 +128,9 @@ if not st.session_state.show_review:
         st.session_state["english_proficiency"] = 7
 
     # Q3 - Native language proficiency
-    question_number = "Q2" if current_language == "en" else "Q3"
+    question_number = "Q2" if get_current_language() == "en" else "Q3"
     native_proficiency = st.select_slider(
-        f"{question_number}. How would you rate your proficiency in {language_names.get(current_language, 'your native language')}? *",
+        f"{question_number}. How would you rate your proficiency in {LANGUAGE_NAMES.get(get_current_language(), 'your native language')}? *",
         options=[1, 2, 3, 4, 5, 6, 7],
         value=7,
         format_func=lambda x: {
@@ -148,7 +154,7 @@ if not st.session_state.show_review:
     )
 
     # Adjust question numbers based on whether Q2 was shown
-    q_offset = 0 if current_language == "en" else 1
+    q_offset = 0 if get_current_language() == "en" else 1
     
     # Q4/Q3 - Biology/medicine education
     biology_education = st.radio(
@@ -358,7 +364,7 @@ if not st.session_state.show_review:
         if FAST_TEST_MODE:
             # Fast test mode with synthetic data (both labels and numeric codes)
             st.session_state.form_data = {
-                "native_language": language_names.get(current_language, "English"),
+                "native_language": LANGUAGE_NAMES.get(get_current_language(), "English"),
                 "english_proficiency": 5,
                 "native_proficiency": 7,
                 "biology_education": "Yes, at high school level only",
@@ -406,7 +412,7 @@ if not st.session_state.show_review:
             if all_fields_filled:
                 # Store form data with both labels (for display) and numeric codes (for analysis)
                 st.session_state.form_data = {
-                    "native_language": language_names.get(current_language, "English"),
+                    "native_language": LANGUAGE_NAMES.get(get_current_language(), "English"),
                     "english_proficiency": int(english_proficiency),
                     "native_proficiency": int(native_proficiency),
                     "biology_education": biology_education,
@@ -459,10 +465,10 @@ else:
     
     if form_data:
         # Adjust question numbers based on whether Q2 was shown
-        q_offset = 0 if current_language == "en" else 1
+        q_offset = 0 if get_current_language() == "en" else 1
         
         # Build English proficiency line only for non-English languages
-        english_prof_line = f"Q2. English Proficiency: {form_data.get('english_proficiency', 'N/A')}/7\n" if current_language != "en" else ""
+        english_prof_line = f"Q2. English Proficiency: {form_data.get('english_proficiency', 'N/A')}/7\n" if get_current_language() != "en" else ""
         
         response_text = f"""Participant Profile Survey Responses
 =====================================
@@ -470,7 +476,7 @@ else:
 Section 1: Language Proficiency
 --------------------------------
 Q1. Native Language: {form_data.get('native_language', 'N/A')}
-{english_prof_line}Q{2 if current_language == "en" else 3}. Native Language Proficiency: {form_data.get('native_proficiency', 'N/A')}/7
+{english_prof_line}Q{2 if get_get_current_language()() == "en" else 3}. Native Language Proficiency: {form_data.get('native_proficiency', 'N/A')}/7
 
 Section 2: Subject Knowledge and Learning Background
 -----------------------------------------------------
@@ -504,3 +510,4 @@ Q{14 + q_offset}. Learning Language Preference: {form_data.get('learning_languag
         st.info("Your responses have been saved. You may now proceed to the next section.")
     else:
         st.error("No form data found. Please submit the survey again.")
+
