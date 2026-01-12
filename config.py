@@ -31,7 +31,7 @@ class CourseConfig:
     slides_directory: str = "picture"  # Subdirectory in uploads/ppt/
     
     # Study-specific settings
-    total_slides: int = 27  # Expected number of slides
+    total_slides: int = 26  # Expected number of slides
     session_duration_minutes: int = 90  # Expected session duration
 
 
