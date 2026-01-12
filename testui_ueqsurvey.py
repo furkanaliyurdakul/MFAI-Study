@@ -77,21 +77,6 @@ language_name = {
     "hi": "Hindi"
 }.get(session_info_global.get("language_code", "en"), "English")
 
-st.info(
-    f"""🌍 **Context for your responses**  
-    
-You just used an AI learning assistant in **{language_name}**. As you answer these questions, 
-    please reflect on your experience using the AI in {language_name} compared to:
-    
-    • Your typical experience with AI tools (often in English)
-    • How you normally learn new technical material
-    • What felt different or similar about learning in {language_name}
-    
-    This comparison is valuable for our research on language effects in AI-assisted learning.
-    """,
-    icon="💭"
-)
-
 st.markdown(
     f"""
 This questionnaire evaluates **your experience with the AI learning assistant in {language_name}** (the chat interface and AI responses you just used).
