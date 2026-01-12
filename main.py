@@ -529,9 +529,7 @@ You have been assigned to use the AI assistant in **{language_names.get(current_
 ---
 When you are ready, click **"Start the Student Profile Survey"** below.  
 Thank you for helping us understand how language affects AI-assisted learning!
-"""
-    )"
-    )
+""")
     # --- GDPR / informed-consent box ---------------------------------
     with st.expander("Study information & GDPR (click to read)"):
         st.markdown(
