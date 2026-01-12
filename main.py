@@ -1397,7 +1397,7 @@ elif st.session_state.current_page == "pilot_smoke_test":
             t0 = time.perf_counter()
             try:
                 resp = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-3-flash-preview",
                     contents=content,
                     config=types.GenerateContentConfig(
                         system_instruction=system,
