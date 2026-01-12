@@ -578,23 +578,14 @@ class SessionManager:
         return final_analytics_path
 
 
-session_manager = None  # keeps the singleton in the module
-
-
 def get_session_manager() -> SessionManager:
-    """Return ONE shared SessionManager instance for the whole app."""
-    global session_manager
-
-    if session_manager is not None:  # we already created / cached it
-        return session_manager
-
-    # Was it created somewhere else (e.g. on the Home page) and put into
-    # session_state?  → reuse it
-    if "session_manager" in st.session_state:
-        session_manager = st.session_state["session_manager"]
-        return session_manager
-
-    # First call overall → create it, remember it everywhere
-    session_manager = SessionManager()
-    st.session_state["session_manager"] = session_manager
-    return session_manager
+    """Return SessionManager instance isolated per Streamlit session.
+    
+    Each browser tab/device gets its own SessionManager with unique session_id.
+    Uses st.session_state for proper per-user isolation (not global variables).
+    """
+    # Only use st.session_state - properly isolated per user connection
+    if "session_manager" not in st.session_state:
+        st.session_state["session_manager"] = SessionManager()
+    
+    return st.session_state["session_manager"]
