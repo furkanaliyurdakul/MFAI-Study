@@ -509,7 +509,10 @@ This ensures valid comparison across study participants.
 ---
 #### Why we record your data  
 We log your interactions with the AI assistant to analyze learning effectiveness across different languages.  
-Your identity is pseudonymized; you may stop at any moment without penalt#### Research Focus: Language in AI Learning
+Your identity is pseudonymized; you may stop at any moment without penalty.
+
+---
+#### Research Focus: Language in AI Learning
 You have been assigned to use the AI assistant in **{language_names.get(current_language(), 'English')}**.
 
 **What this means**:  
