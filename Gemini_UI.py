@@ -370,14 +370,18 @@ def _load_slides_cached(slides_dir: str) -> list:
     if dir_path.exists():
         # Filter and sort slides with robust error handling
         valid_slides = []
-        for p in dir_path.glob("Slide_*.png"):
-            match = SLIDE_FILENAME_RE.search(p.stem)
-            if match:
-                try:
-                    slide_num = int(match.group(1))
-                    valid_slides.append((slide_num, p))
-                except (ValueError, IndexError):
-                    continue
+        # Support both .png and .jpg/.jpeg extensions
+        for pattern in ["Slide_*.png", "Slide_*.jpg", "Slide_*.jpeg"]:
+            for p in dir_path.glob(pattern):
+                # Remove " Genetics of Cancer" or other course-specific suffixes before the extension
+                stem = p.stem.split(' Genetics of Cancer')[0].split(' of Lecture')[0]
+                match = SLIDE_FILENAME_RE.search(stem)
+                if match:
+                    try:
+                        slide_num = int(match.group(1))
+                        valid_slides.append((slide_num, p))
+                    except (ValueError, IndexError):
+                        continue
         # Sort by slide number and return paths
         valid_slides.sort(key=lambda x: x[0])
         return [path for _, path in valid_slides]
