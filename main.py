@@ -667,11 +667,9 @@ elif st.session_state.current_page == "learning":
             1. **Ask about specific slides**: Click "Explain this slide" below any slide to get an explanation
             2. **Ask your own questions**: Type questions in the chat box about any concept from the material
 
-            The AI assistant has access to all {config.course.total_slides} slides and the full lecture transcription**.
+            The AI assistant has access to all {config.course.total_slides} slides and the full lecture transcription.
 
             **Expected interaction**: Please actively use the AI chat to explore concepts, ask clarifying questions, and deepen your understanding. This is the core learning experience we're studying.
-
-            **Remember: Use {language_names.get(current_language(), 'English')} for all AI interactions**  
                             
             You are learning in **{language_names.get(current_language(), 'English')}** as part of our language study. 
             Please type your questions and read AI responses in this language.
