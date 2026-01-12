@@ -10,7 +10,7 @@ LANGUAGE_NAMES = {
     "hi": "Hindi"
 }
 
-def get_get_current_language():
+def get_current_language():
     """Get current language from session state."""
     return st.session_state.get("language_code", "en")
 
@@ -98,7 +98,7 @@ if not st.session_state.show_review:
     # Q1 - Native language (pre-filled from credentials)
     st.text_input(
         "Q1. What is your native language?",
-        value=LANGUAGE_NAMES.get(get_get_current_language()(), "English"),
+        value=LANGUAGE_NAMES.get(get_current_language(), "English"),
         disabled=True,
         key="native_language_display",
         help="Your assigned study language was set during enrollment and determines your experimental condition. This cannot be changed as we are researching how different languages affect learning with AI assistants. If you believe this is incorrect, please inform the research team."
@@ -476,7 +476,7 @@ else:
 Section 1: Language Proficiency
 --------------------------------
 Q1. Native Language: {form_data.get('native_language', 'N/A')}
-{english_prof_line}Q{2 if get_get_current_language()() == "en" else 3}. Native Language Proficiency: {form_data.get('native_proficiency', 'N/A')}/7
+{english_prof_line}Q{2 if get_current_language() == "en" else 3}. Native Language Proficiency: {form_data.get('native_proficiency', 'N/A')}/7
 
 Section 2: Subject Knowledge and Learning Background
 -----------------------------------------------------
