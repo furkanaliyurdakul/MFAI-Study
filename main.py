@@ -473,26 +473,19 @@ if st.session_state.current_page == "home":
     
     st.title(f"{config.platform.learning_section_name} Platform")
     
-    # Prominent language notice box
-    st.info(
-        f"""🌍 **Your Study Language: {language_names.get(current_language(), 'English')}**  
-        
-This study investigates how **using AI assistants in different languages** affects learning outcomes. 
-You will complete all activities—including chatting with the AI—in **{language_names.get(current_language(), 'English')}**.
-        
-**Important**: Please use **only {language_names.get(current_language(), 'English')}** when interacting with the AI assistant. 
-This ensures valid comparison across study participants.
-        """,
-        icon="ℹ️"
-    )
-    
     st.markdown(
         f"""
 ### Welcome – what this session is about
+
+**Your Study Language: {language_names.get(current_language(), 'English')}**
+
 You are taking part in our KU Leuven study on **language effects in AI-assisted learning**.
 We are investigating whether the language used when learning with AI assistants affects how well students understand the material.
 
 In today's session, you will learn about **{TOPIC}** using an AI assistant in **{language_names.get(current_language(), 'English')}**.
+
+**Important**: Please use **only {language_names.get(current_language(), 'English')}** when interacting with the AI assistant. 
+This ensures valid comparison across study participants.
 
 ---
 #### What will happen? – step by step  
@@ -661,31 +654,25 @@ elif st.session_state.current_page == "learning":
         
         # Row 1: Explanation text (instructions)
         with col_main:
-            # Language reminder box
-            st.info(
-                f"""🌍 **Remember: Use {language_names.get(current_language(), 'English')} for all AI interactions**  
-                
-You are learning in **{language_names.get(current_language(), 'English')}** as part of our language study. 
-Please type your questions and read AI responses in this language.
-                """,
-                icon="💬"
-            )
             
             st.markdown(
                 f"""
-### How to Use This Section
+            ### How to Use This Section
 
-You can interact with the AI assistant in two ways:
+            You can interact with the AI assistant in two ways:
 
-1. **Ask about specific slides**: Click "Explain this slide" below any slide to get an explanation
-2. **Ask your own questions**: Type questions in the chat box about any concept from the material
+            1. **Ask about specific slides**: Click "Explain this slide" below any slide to get an explanation
+            2. **Ask your own questions**: Type questions in the chat box about any concept from the material
 
-The AI assistant has access to all {config.course.total_slides} slides and the full lecture transcription in **{language_names.get(current_language(), 'English')}**.
+            The AI assistant has access to all {config.course.total_slides} slides and the full lecture transcription**.
 
-**Expected interaction**: Please actively use the AI chat to explore concepts, ask clarifying questions, and deepen your understanding. This is the core learning experience we're studying.
+            **Expected interaction**: Please actively use the AI chat to explore concepts, ask clarifying questions, and deepen your understanding. This is the core learning experience we're studying.
 
-**No minimum required**: Interact as much or as little as you find helpful—use it naturally, as you would in your everyday learning.
-"""
+            **Remember: Use {language_names.get(current_language(), 'English')} for all AI interactions**  
+                            
+            You are learning in **{language_names.get(current_language(), 'English')}** as part of our language study. 
+            Please type your questions and read AI responses in this language.
+            """
             )
         
         with col_spacer:
