@@ -96,38 +96,18 @@ def make_base_context(language_code: str = "en") -> dict:
     • The SYSTEM + Formatting rules are included for all runs.
     • Language enforcement ensures responses match the user's assigned language.
     • NO student profile - all users get identical treatment.
+    • ALL prompt text is in the target language to avoid English bias.
     """
-    # Language-specific enforcement instructions
-    language_names = {
-        "en": "English",
-        "de": "German (Deutsch)",
-        "nl": "Dutch (Nederlands)",
-        "tr": "Turkish (Türkçe)",
-        "sq": "Albanian (Shqip)",
-        "hi": "Hindi (हिन्दी)"
-    }
+    from prompt_translations import get_prompts
+    prompts = get_prompts(language_code)
     
-    target_language = language_names.get(language_code, "English")
-    
-    system_msg = (
-        f"You are a teaching assistant for a Generative AI course. "
-        f"CRITICAL REQUIREMENT: You MUST respond ONLY in {target_language}. "
-        f"All explanations, answers, and interactions must be in {target_language}. "
-        f"Never use English or any other language in your responses unless the assigned language is English. "
-        f"Always answer in Markdown, never in JSON or wrapped in triple-backticks."
-    )
-
     base = {
-        "System": system_msg,
+        "System": prompts["system_chat"],
 
-        # universal formatting rules
+        # universal formatting rules (in target language)
         "Instructions": {
-            "Formatting": (
-                "Return Markdown. Do **not** output JSON or wrap the entire reply in "
-                "``` … ```.  If you need to show a code snippet, use fenced code-blocks "
-                "(```python … ```).  Write math inline as LaTeX ($x^2$)."
-            ),
-            "Tone": "Friendly, concise, expert",
+            "Formatting": prompts["formatting_rules"],
+            "Tone": prompts["tone"],
         },
     }
 
@@ -168,50 +148,31 @@ def create_summary_prompt(slide: str) -> str:
 def create_structured_prompt(
     slide_txt: str, transcript: str, slide: str, language_code: str = "en"
 ) -> str:
-    """Gemini JSON prompt – standardized explanation based on course content only."""
-
-    # Language-specific enforcement
-    language_names = {
-        "en": "English",
-        "de": "German (Deutsch)",
-        "nl": "Dutch (Nederlands)",
-        "tr": "Turkish (Türkçe)",
-        "sq": "Albanian (Shqip)",
-        "hi": "Hindi (हिन्दी)"
-    }
+    """Gemini JSON prompt – standardized explanation based on course content only.
     
-    target_language = language_names.get(language_code, "English")
+    All prompt text is in the target language to ensure fair comparison without English bias.
+    """
+    from prompt_translations import get_prompts
+    prompts = get_prompts(language_code)
 
     # ── prompt ----------------------------------------------------- #
-    system_msg = (
-        f"You are a teaching assistant for a Cancer Biology course. "
-        f"CRITICAL: Respond ONLY in {target_language}. "
-        f"Use the provided lecture content to explain concepts clearly."
-    )
-
     prompt_dict = {
         # ── SYSTEM (high‑level reminders) ───────────────────────────────
-        "System": system_msg,
+        "System": prompts["system_explanation"],
 
         # ── ROLE & OBJECTIVE ────────────────────────────────────────
-        "Role": "Cancer Biology Tutor",
-        "Objective": (
-            f"Provide a clear, educational explanation of *{slide}* based on the lecture materials."
-        ),
+        "Role": prompts["role_tutor"],
+        "Objective": prompts["objective_explanation"].format(slide=slide),
 
         # ── INSTRUCTIONS / RESPONSE RULES ───────────────────────────────
         "Instructions": {
-            "Formatting": (
-                "Return Markdown. Do **not** output JSON or wrap the entire reply in ``` … ```.\n"
-                "If you need to show a code snippet, use fenced code‑blocks "
-                "(```python` … ```). Write math inline as LaTeX ($x^2$)."
-            ),
-            "Tone": "Friendly, clear, expert",
+            "Formatting": prompts["formatting_rules"],
+            "Tone": prompts["tone"],
             "Guidelines": [
-                "Use clear, accessible language",
-                "Include relevant examples from the lecture",
-                "Explain key concepts thoroughly",
-                "Connect ideas to practical applications",
+                prompts["guideline_clear_language"],
+                prompts["guideline_examples"],
+                prompts["guideline_thorough"],
+                prompts["guideline_practical"],
             ],
         },
 
@@ -219,13 +180,11 @@ def create_structured_prompt(
         "Context": {
             "Slides": {
                 "content": slide_txt,
-                "usage_hint": f"Pull core concepts from {slide} verbatim when useful."
+                "usage_hint": prompts["slides_hint"].format(slide=slide)
             },
             "Transcript": {
                 "content": transcript,
-                "usage_hint": (
-                    "Use concrete examples or analogies that appear in the lecture."
-                ),
+                "usage_hint": prompts["transcript_hint"],
             },
         },
     }
