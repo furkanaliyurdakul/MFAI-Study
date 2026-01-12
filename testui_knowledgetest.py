@@ -12,9 +12,9 @@ st.title(f"Knowledge Test - {config.course.course_title}")
 
 st.markdown(
     """
-This assessment measures your knowledge of key concepts in Generative AI, including Large Language Models (LLMs), supervised learning, and AI applications, as covered in the lecture materials.
+This assessment measures your knowledge of key concepts in Cancer Biology, including genetic mechanisms, tumor suppressor genes, oncogenes, and cellular processes, as covered in the lecture materials.
 
-The assessment consists of 8 questions. Question 5 is a multiple-select question where you can choose more than one answer. You receive 0.25 points for each correct choice in Question 5 (maximum 1.0 point). All other questions are single-choice and worth 1 point each.
+The assessment consists of 5 questions. All questions are single-choice and worth 1 point each.
 
 **Note:** This test is for research purposes only. Your score does not affect your participation. Please answer to the best of your ability, as your honest performance helps us compare learning outcomes across different language groups.
 
@@ -26,92 +26,207 @@ Ready to begin?
 
 # Question 1 - Single choice radio button
 st.markdown(
-    "**1. Which of these is the best definition of 'Generative AI'?**"
+    "**1. A woman inherits one mutated BRCA1 allele. Which statement best explains why her risk of breast cancer is elevated but not certain?**"
 )
 q1_options = [
-    "Artificial intelligence systems that can map from an input A to an output B.",
-    "Any web-based application that generates text.",
-    "AI that can produce high-quality content, such as text, images, and audio.",
-    "A form of web search.",
+    "Both alleles are already inactive from birth.",
+    "The remaining wild-type allele can still produce functional protein until a second mutation occurs.",
+    "BRCA1 is only important in embryonic cells, not in adult tissue.",
+    "Inherited mutations always guarantee cancer, regardless of environment.",
 ]
 q1 = st.radio("Select one answer for question 1:", q1_options, key="knowledge_q1", index=None)
 
 # Question 2 - Single choice radio button
 st.markdown(
-    "**2. Which of these is the most accurate description of a Large Language Model (LLM)?**"
+    "**2. Which scenario best illustrates the \"gas and brakes\" analogy of cancer genetics?**"
 )
 q2_options = [
-    "It generates text by finding a writing partner to work with you.",
-    "It generates text by using supervised learning to carry out web search.",
-    "It generates text by repeatedly predicting the next word.",
-    "It generates text by repeatedly predicting words in random order.",
+    "A cell acquires an inactivating mutation in p53, leading to loss of cell cycle arrest after DNA damage.",
+    "A cell acquires an inactivating mutation in Ras, reducing MAPK pathway signaling.",
+    "A cell deletes genes controlling glycolysis, reducing its metabolic activity.",
+    "A cell undergoes benign variation in a noncoding intron sequence.",
 ]
 q2 = st.radio("Select one answer for question 2:", q2_options, key="knowledge_q2", index=None)
 
 # Question 3 - Single choice radio button
 st.markdown(
-    "**3. True or False: Because an LLM has learned from many web pages on the internet, its answers are always more trustworthy than other sources on the internet.**"
+    "**3. Why does epigenetic regulation play a critical role in explaining cellular diversity despite identical DNA sequences in different tissues?**"
 )
 q3_options = [
-    "True",
-    "False",
+    "Epigenetics modifies gene expression without altering DNA sequence, enabling cell-type-specific transcription programs.",
+    "Cells randomly delete DNA they do not need, creating diversity.",
+    "DNA sequence varies significantly between liver and skin cells.",
+    "Epigenetic changes occur only in cancer cells, not in normal tissues.",
 ]
 q3 = st.radio("Select one answer for question 3:", q3_options, key="knowledge_q3", index=None)
 
 # Question 4 - Single choice radio button
 st.markdown(
-    "**4. Why do we call AI a general-purpose technology, similar to electricity or the internet?**"
+    "**4. How does genomic instability accelerate tumor evolution?**"
 )
 q4_options = [
-    "Because it is useful for many different tasks.",
-    "Because it can chat.",
-    "Because it includes both supervised learning and generative AI.",
-    "Because it can be accessed via the general web.",
+    "It maintains identical DNA across all tumor cells, ensuring stability.",
+    "It introduces a higher rate of mutation, increasing the chance of acquiring oncogene activation and tumor suppressor loss.",
+    "It prevents mutations from being passed to daughter cells, stabilizing growth.",
+    "It reduces mutation frequency, protecting the genome from becoming oncogenic.",
 ]
 q4 = st.radio("Select one answer for question 4:", q4_options, key="knowledge_q4", index=None)
 
-# Question 5 - Multiple choice checkboxes
+# Question 5 - Single choice radio button
 st.markdown(
-    "**5. Which of these tasks are good examples of what an LLM or other Generative AI system can do? Select all that apply. (Q5 score is out of 4 options.)**"
+    "**5. According to the lecture, which of the following is not one of the three major cellular processes that a cancer cell must overcome to become malignant?**"
 )
-q5_option_a = st.checkbox("Summarise a long article into a short paragraph.", key="knowledge_q5_a")
-q5_option_b = st.checkbox("Earn a university degree on behalf of a student.", key="knowledge_q5_b")
-q5_option_c = st.checkbox("Translate a paragraph from English into Turkish.", key="knowledge_q5_c")
-q5_option_d = st.checkbox("Proofread a text and suggest clearer wording.", key="knowledge_q5_d")
-
-# Question 6 - Single choice radio button
-st.markdown(
-    "**6. A hospital uses AI to look at X-ray images and label each one as 'healthy' or 'disease present'. According to the course, which AI tool does this mainly use?**"
-)
-q6_options = [
-    "Generative AI",
-    "Supervised learning",
-    "Unsupervised learning",
-    "Reinforcement learning",
+q5_options = [
+    "Regulation of proliferation",
+    "Regulation of apoptosis/cell survival",
+    "Regulation of cellular communication",
+    "Regulation of protein translation",
 ]
-q6 = st.radio("Select one answer for question 6:", q6_options, key="knowledge_q6", index=None)
+q5 = st.radio("Select one answer for question 5:", q5_options, key="knowledge_q5", index=None)
 
-# Question 7 - Single choice radio button
-st.markdown(
-    "**7. You hear of a company using an LLM to automatically route incoming customer emails to the right department. Which of these use cases is it most likely to be?**"
-)
-q7_options = [
-    "Employees are copy-pasting the emails into a web interface to decide how to route them.",
-    "The company has a software-based application that uses an LLM to automatically route the emails.",
-]
-q7 = st.radio("Select one answer for question 7:", q7_options, key="knowledge_q7", index=None)
+# Correct Answers
+correct_answers = {
+    "knowledge_q1": "The remaining wild-type allele can still produce functional protein until a second mutation occurs.",
+    "knowledge_q2": "A cell acquires an inactivating mutation in p53, leading to loss of cell cycle arrest after DNA damage.",
+    "knowledge_q3": "Epigenetics modifies gene expression without altering DNA sequence, enabling cell-type-specific transcription programs.",
+    "knowledge_q4": "It introduces a higher rate of mutation, increasing the chance of acquiring oncogene activation and tumor suppressor loss.",
+    "knowledge_q5": "Regulation of protein translation",
+}
 
-# Question 8 - Single choice radio button
-st.markdown(
-    "**8. According to the lecture, what is one advantage of training a very large AI model (instead of a small one) on more and more data?**"
-)
-q8_options = [
-    "A large model quickly reaches a performance limit and then stops improving.",
-    "A large model keeps improving its performance as you give it more data, while a small model improves much less.",
-    "A large model always performs worse than a small model on real tasks.",
-    "Only small models can be used with supervised learning.",
-]
-q8 = st.radio("Select one answer for question 8:", q8_options, key="knowledge_q8", index=None)
+# Initialize session state for test completion status
+if "test_submitted" not in st.session_state:
+    st.session_state.test_submitted = False
+
+# Calculate Score
+score = 0
+
+# Disable inputs if test has already been submitted
+if st.session_state.test_submitted:
+    st.warning("You have already submitted this test. Your results have been saved.")
+
+    # Display the saved results if available
+    if "result_summary" in st.session_state:
+        st.success(f"You scored {st.session_state.score:.2f}/5!")
+        st.markdown("### Your Test Results")
+        st.markdown(
+            st.session_state.result_summary.replace("\n", "<br>"),
+            unsafe_allow_html=True,
+        )
+else:
+    # Two-step submission process
+    if "confirm_submission" not in st.session_state:
+        st.session_state.confirm_submission = False
+
+    if st.button("Submit and calculate score"):
+        st.session_state.confirm_submission = True
+
+    if st.session_state.confirm_submission:
+        st.warning(
+            "⚠️ Are you sure you want to submit? You won't be able to retake this test."
+        )
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Cancel"):
+                st.session_state.confirm_submission = False
+                st.rerun()
+        with col2:
+            if st.button("Confirm Submission"):
+                # All questions are single-choice
+                if q1 == correct_answers["knowledge_q1"]:
+                    score += 1
+                if q2 == correct_answers["knowledge_q2"]:
+                    score += 1
+                if q3 == correct_answers["knowledge_q3"]:
+                    score += 1
+                if q4 == correct_answers["knowledge_q4"]:
+                    score += 1
+                if q5 == correct_answers["knowledge_q5"]:
+                    score += 1
+
+                # Store the score in session state to mark test as completed
+                st.session_state.score = score
+                st.session_state.test_submitted = True
+
+                st.success(f"You scored {score:.2f}/5!")
+
+                # Summary with detailed breakdown
+                result_summary = f"""
+Your Responses:
+--------------------------------------
+1. {q1} {'✓' if q1 == correct_answers['knowledge_q1'] else '✗'}
+2. {q2} {'✓' if q2 == correct_answers['knowledge_q2'] else '✗'}
+3. {q3} {'✓' if q3 == correct_answers['knowledge_q3'] else '✗'}
+4. {q4} {'✓' if q4 == correct_answers['knowledge_q4'] else '✗'}
+5. {q5} {'✓' if q5 == correct_answers['knowledge_q5'] else '✗'}
+
+Total Score: {score}/5
+"""
+
+                # Store the result summary in session state
+                st.session_state.result_summary = result_summary
+
+                # Import the session manager
+                from session_manager import get_session_manager
+
+                # Get or create a session manager instance
+                session_manager = get_session_manager()
+
+                # Save the test results using the session manager
+                file_path = session_manager.save_knowledge_test_results(result_summary)
+
+                # Get the session info for display
+                session_info = session_manager.get_session_info()
+                fake_name = session_info["fake_name"]
+
+                st.success(
+                    f"Your results have been saved with pseudonymized ID: {fake_name}"
+                )
+
+                # Display detailed results with correct/incorrect answers highlighted
+                st.markdown("### Your Test Results")
+
+                # Format the results with colored indicators for correct/incorrect answers
+                formatted_results = "<h4>Question 1:</h4>"
+                formatted_results += f"<p>Your answer: {q1} {'✅' if q1 == correct_answers['knowledge_q1'] else '❌'}</p>"
+                if q1 != correct_answers["knowledge_q1"]:
+                    formatted_results += (
+                        f"<p>Correct answer: {correct_answers['knowledge_q1']}</p>"
+                    )
+
+                formatted_results += "<h4>Question 2:</h4>"
+                formatted_results += f"<p>Your answer: {q2} {'✅' if q2 == correct_answers['knowledge_q2'] else '❌'}</p>"
+                if q2 != correct_answers["knowledge_q2"]:
+                    formatted_results += (
+                        f"<p>Correct answer: {correct_answers['knowledge_q2']}</p>"
+                    )
+
+                formatted_results += "<h4>Question 3:</h4>"
+                formatted_results += f"<p>Your answer: {q3} {'✅' if q3 == correct_answers['knowledge_q3'] else '❌'}</p>"
+                if q3 != correct_answers["knowledge_q3"]:
+                    formatted_results += (
+                        f"<p>Correct answer: {correct_answers['knowledge_q3']}</p>"
+                    )
+
+                formatted_results += "<h4>Question 4:</h4>"
+                formatted_results += f"<p>Your answer: {q4} {'✅' if q4 == correct_answers['knowledge_q4'] else '❌'}</p>"
+                if q4 != correct_answers["knowledge_q4"]:
+                    formatted_results += (
+                        f"<p>Correct answer: {correct_answers['knowledge_q4']}</p>"
+                    )
+
+                formatted_results += "<h4>Question 5:</h4>"
+                formatted_results += f"<p>Your answer: {q5} {'✅' if q5 == correct_answers['knowledge_q5'] else '❌'}</p>"
+                if q5 != correct_answers["knowledge_q5"]:
+                    formatted_results += (
+                        f"<p>Correct answer: {correct_answers['knowledge_q5']}</p>"
+                    )
+
+                formatted_results += f"<h4>Total Score: {score}/5</h4>"
+
+                st.markdown(formatted_results, unsafe_allow_html=True)
+
+                st.session_state["formatted_results"] = formatted_results
+                st.rerun()
 
 # Correct Answers
 correct_answers = {

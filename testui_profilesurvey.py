@@ -48,12 +48,13 @@ def familiarity_to_int(label: str) -> int:
     return mapping.get(label, None)
 
 def usage_to_int(label: str) -> int:
-    """Map usage frequency labels to integers 0-3"""
+    """Map usage frequency labels to integers 0-4"""
     mapping = {
         "Never": 0,
-        "Yes, once or rarely": 1,
-        "Yes, occasionally": 2,
-        "Yes, frequently": 3,
+        "Rarely (once or twice total)": 1,
+        "Occasionally (monthly)": 2,
+        "Regularly (weekly)": 3,
+        "Frequently (daily)": 4,
     }
     return mapping.get(label, None)
 
@@ -74,17 +75,17 @@ if not st.session_state.show_review:
     )
 
     # Initialize all form fields (skip widgets with proper defaults)
+    init_form_field("biology_education")
+    init_form_field("cancer_biology_familiarity")
+    init_form_field("cancer_biology_knowledge")
+    init_form_field("topic_interest")
     init_form_field("genai_familiarity")
     init_form_field("genai_usage")
-    init_form_field("genai_knowledge")
-    init_form_field("formal_ai_training")
+    init_form_field("llm_language_usage")
     init_form_field("gender")
     init_form_field("education_level")
     init_form_field("field_of_study")
     init_form_field("learning_language_preference")
-    init_form_field("topic_interest")
-    init_form_field("llm_language_usage")
-    init_form_field("llm_usage_frequency")
 
     st.header("Section 1: Language Proficiency")
 
@@ -140,14 +141,83 @@ if not st.session_state.show_review:
     )
 
     st.markdown("---")
-    st.header("Section 2: Prior Knowledge of Generative AI")
+    st.header("Section 2: Subject Knowledge and Learning Background")
+    st.caption(
+        "These questions help us understand your baseline knowledge of cancer biology, "
+        "which is important for analyzing how effectively you learn with the AI assistant."
+    )
 
     # Adjust question numbers based on whether Q2 was shown
     q_offset = 0 if current_language == "en" else 1
     
-    # Q4/Q3 - Familiarity with GenAI tools
+    # Q4/Q3 - Biology/medicine education
+    biology_education = st.radio(
+        f"Q{3 + q_offset}. Have you ever taken formal courses in biology or medicine? *",
+        [
+            "Yes, at university level",
+            "Yes, at high school level only",
+            "No, never"
+        ],
+        index=None,
+        key="biology_education",
+        help="This helps us understand your scientific background in life sciences"
+    )
+
+    # Q5/Q4 - Cancer biology familiarity
+    cancer_biology_familiarity = st.radio(
+        f"Q{4 + q_offset}. Before this study, how familiar were you with cancer biology concepts? *",
+        [
+            "1 - Not at all familiar",
+            "2 - Slightly familiar",
+            "3 - Moderately familiar",
+            "4 - Familiar",
+            "5 - Very familiar"
+        ],
+        index=None,
+        key="cancer_biology_familiarity",
+        help="Rate your prior exposure to topics like genetic mutations, tumor development, oncogenes, etc."
+    )
+
+    # Q6/Q5 - Self-assessed cancer biology knowledge
+    cancer_biology_knowledge = st.radio(
+        f"Q{5 + q_offset}. \"I know a lot about cancer biology (genetic mechanisms, tumor development, and cellular processes).\" *",
+        [
+            "1 - Strongly Disagree",
+            "2 - Disagree",
+            "3 - Neutral",
+            "4 - Agree",
+            "5 - Strongly Agree"
+        ],
+        index=None,
+        key="cancer_biology_knowledge",
+        help="Rate your agreement with this statement about your current knowledge level"
+    )
+
+    # Q7/Q6 - Interest in topic
+    topic_interest = st.radio(
+        f"Q{6 + q_offset}. \"I am interested in learning about cancer biology.\" *",
+        [
+            "1 - Strongly Disagree",
+            "2 - Disagree",
+            "3 - Neutral",
+            "4 - Agree",
+            "5 - Strongly Agree"
+        ],
+        index=None,
+        key="topic_interest",
+        help="Your motivation to learn this topic may affect learning outcomes"
+    )
+
+    st.markdown("---")
+    st.header("Section 3: AI Assistant Experience")
+    st.caption(
+        "These questions help us understand your prior experience with AI assistants, "
+        "which may affect how comfortably you interact with the learning tool."
+    )
+
+    # Q8/Q7 - Familiarity with GenAI tools
     genai_familiarity = st.radio(
-        f"Q{3 + q_offset}. How familiar are you with generative AI tools (e.g., ChatGPT, DALL-E)? *",
+        f"Q{7 + q_offset}. How familiar are you with generative AI assistants (e.g., ChatGPT, Claude, Gemini)? *",
         [
             "1 - Not at all familiar",
             "2 - Slightly familiar",
@@ -157,53 +227,44 @@ if not st.session_state.show_review:
         ],
         index=None,
         key="genai_familiarity",
-        help="Rate your general awareness and exposure to generative AI tools"
+        help="Rate your general awareness and exposure to AI chat assistants"
     )
 
-    # Q5/Q4 - Usage frequency
+    # Q9/Q8 - Usage frequency
     genai_usage = st.radio(
-        f"Q{4 + q_offset}. Have you used any generative AI tools before this study? *",
+        f"Q{8 + q_offset}. How often do you use AI assistants like ChatGPT, Claude, or Gemini? *",
         [
             "Never",
-            "Yes, once or rarely",
-            "Yes, occasionally",
-            "Yes, frequently"
+            "Rarely (once or twice total)",
+            "Occasionally (monthly)",
+            "Regularly (weekly)",
+            "Frequently (daily)"
         ],
         index=None,
         key="genai_usage",
-        help="How often have you actually used tools like ChatGPT?"
+        help="How often have you actually used conversational AI tools?"
     )
 
-    # Q6/Q5 - Self-assessed knowledge
-    genai_knowledge = st.radio(
-        f"Q{5 + q_offset}. \"I know a lot about generative AI (how it works and its concepts).\" *",
+    # Q10/Q9 - AI language usage
+    llm_language_usage = st.radio(
+        f"Q{9 + q_offset}. When you use AI assistants, which language do you primarily use? *",
         [
-            "1 - Strongly Disagree",
-            "2 - Disagree",
-            "3 - Neutral",
-            "4 - Agree",
-            "5 - Strongly Agree"
+            "Primarily English",
+            "Both English and my native language equally",
+            "Primarily my native language",
+            "I have never used AI assistants"
         ],
         index=None,
-        key="genai_knowledge",
-        help="Rate your agreement with this statement about your prior knowledge"
-    )
-
-    # Q7/Q6 - Formal training
-    formal_ai_training = st.radio(
-        f"Q{6 + q_offset}. Have you ever taken a course or formal training in artificial intelligence or machine learning? *",
-        ["Yes", "No"],
-        index=None,
-        key="formal_ai_training",
-        help="This includes university courses, online courses, or professional training"
+        key="llm_language_usage",
+        help="Understanding your language habits with AI helps interpret your comfort level in this study"
     )
 
     st.markdown("---")
-    st.header("Section 3: Demographics and Background")
+    st.header("Section 4: Demographics and Background")
 
-    # Q8/Q7 - Age
+    # Q11/Q10 - Age
     age = st.number_input(
-        f"Q{7 + q_offset}. What is your age (in years)? *",
+        f"Q{10 + q_offset}. What is your age (in years)? *",
         min_value=16,
         max_value=100,
         value=20,
@@ -212,17 +273,17 @@ if not st.session_state.show_review:
         help="Enter your age in years"
     )
 
-    # Q9/Q8 - Gender
+    # Q12/Q11 - Gender
     gender = st.radio(
-        f"Q{8 + q_offset}. What is your gender? *",
+        f"Q{11 + q_offset}. What is your gender? *",
         ["Male", "Female", "Non-binary", "Prefer not to say"],
         index=None,
         key="gender"
     )
 
-    # Q10/Q9 - Education level
+    # Q13/Q12 - Education level
     education_level = st.radio(
-        f"Q{9 + q_offset}. What is your current level of education? *",
+        f"Q{12 + q_offset}. What is your current level of education? *",
         [
             "Bachelor's degree",
             "Master's degree",
@@ -243,9 +304,9 @@ if not st.session_state.show_review:
             help="E.g., High school, Professional certification, Trade school, etc."
         )
 
-    # Q11/Q10 - Field of study
+    # Q14/Q13 - Field of study
     field_of_study = st.radio(
-        f"Q{10 + q_offset}. What is your field of study or professional area? *",
+        f"Q{13 + q_offset}. What is your field of study or professional area? *",
         [
             "Computer Science/IT",
             "Engineering (non-IT)",
@@ -273,60 +334,19 @@ if not st.session_state.show_review:
             help="Enter your field of study or professional area"
         )
 
-    # Q12/Q11 - Learning language preference
+    # Q15/Q14 - Learning language preference
     learning_language_preference = st.radio(
-        f"Q{11 + q_offset}. Do you generally prefer to learn new material in English or your native language? *",
+        f"Q{14 + q_offset}. Do you generally prefer to learn new material in English or your native language? *",
         [
-            "Primarily English",
-            "Both English and native language equally",
-            "Primarily native language"
+            "Strongly prefer English",
+            "Somewhat prefer English",
+            "No strong preference",
+            "Somewhat prefer native language",
+            "Strongly prefer native language"
         ],
         index=None,
         key="learning_language_preference",
-        help="This helps us understand your language learning preferences"
-    )
-
-    # Q13/Q12 - Topic interest
-    topic_interest = st.radio(
-        f"Q{12 + q_offset}. \"I am interested in learning about generative AI.\" *",
-        [
-            "1 - Strongly Disagree",
-            "2 - Disagree",
-            "3 - Neutral",
-            "4 - Agree",
-            "5 - Strongly Agree"
-        ],
-        index=None,
-        key="topic_interest",
-        help="Rate your interest in learning about generative AI"
-    )
-
-    # Q14/Q13 - LLM language usage
-    llm_language_usage = st.radio(
-        f"Q{13 + q_offset}. When you use AI tools like ChatGPT or Gemini, which language do you primarily use? *",
-        [
-            "Primarily English",
-            "Both English and native language equally",
-            "Primarily native language"
-        ],
-        index=None,
-        key="llm_language_usage",
-        help="This helps us understand your prior experience with AI tools in different languages"
-    )
-
-    # Q15/Q14 - LLM usage frequency
-    llm_usage_frequency = st.radio(
-        f"Q{14 + q_offset}. How often do you use AI tools like ChatGPT or Gemini? *",
-        [
-            "Daily",
-            "Weekly",
-            "Monthly",
-            "Rarely",
-            "Never"
-        ],
-        index=None,
-        key="llm_usage_frequency",
-        help="This helps us understand your experience level with AI assistants"
+        help="This is KEY for interpreting how language choice affects your learning experience"
     )
 
     st.markdown("---")
@@ -341,22 +361,23 @@ if not st.session_state.show_review:
                 "native_language": language_names.get(current_language, "English"),
                 "english_proficiency": 5,
                 "native_proficiency": 7,
+                "biology_education": "Yes, at high school level only",
+                "cancer_biology_familiarity_label": "2 - Slightly familiar",
+                "cancer_biology_familiarity": 2,
+                "cancer_biology_knowledge_label": "2 - Disagree",
+                "cancer_biology_knowledge": 2,
+                "topic_interest_label": "3 - Neutral",
+                "topic_interest": 3,
                 "genai_familiarity_label": "3 - Moderately familiar",
                 "genai_familiarity": 3,
-                "genai_usage_label": "Yes, occasionally",
+                "genai_usage_label": "Occasionally (monthly)",
                 "genai_usage": 2,
-                "genai_knowledge_label": "3 - Neutral",
-                "genai_knowledge": 3,
-                "formal_ai_training": "No",
+                "llm_language_usage": "Both English and my native language equally",
                 "age": 24,
                 "gender": "Prefer not to say",
                 "education_level": "Master's degree",
                 "field_of_study": "Computer Science/IT",
-                "learning_language_preference": "Both equally / No strong preference",
-                "topic_interest_label": "4 - Agree",
-                "topic_interest": 4,
-                "llm_language_usage": "Both English and native language equally",
-                "llm_usage_frequency": "Weekly"
+                "learning_language_preference": "No strong preference"
             }
             st.session_state.show_review = True
             st.success("FAST_TEST_MODE: Synthetic profile created.")
@@ -366,10 +387,13 @@ if not st.session_state.show_review:
             all_fields_filled = (
                 english_proficiency is not None
                 and native_proficiency is not None
+                and biology_education is not None
+                and cancer_biology_familiarity is not None
+                and cancer_biology_knowledge is not None
+                and topic_interest is not None
                 and genai_familiarity is not None
                 and genai_usage is not None
-                and genai_knowledge is not None
-                and formal_ai_training is not None
+                and llm_language_usage is not None
                 and age is not None
                 and gender is not None
                 and education_level is not None
@@ -377,9 +401,6 @@ if not st.session_state.show_review:
                 and field_of_study is not None
                 and (field_of_study != "Other" or (field_of_study_other and field_of_study_other.strip()))
                 and learning_language_preference is not None
-                and topic_interest is not None
-                and llm_language_usage is not None
-                and llm_usage_frequency is not None
             )
 
             if all_fields_filled:
@@ -388,24 +409,25 @@ if not st.session_state.show_review:
                     "native_language": language_names.get(current_language, "English"),
                     "english_proficiency": int(english_proficiency),
                     "native_proficiency": int(native_proficiency),
+                    "biology_education": biology_education,
+                    "cancer_biology_familiarity_label": cancer_biology_familiarity,
+                    "cancer_biology_familiarity": familiarity_to_int(cancer_biology_familiarity),
+                    "cancer_biology_knowledge_label": cancer_biology_knowledge,
+                    "cancer_biology_knowledge": likert_5_to_int(cancer_biology_knowledge),
+                    "topic_interest_label": topic_interest,
+                    "topic_interest": likert_5_to_int(topic_interest),
                     "genai_familiarity_label": genai_familiarity,
                     "genai_familiarity": familiarity_to_int(genai_familiarity),
                     "genai_usage_label": genai_usage,
                     "genai_usage": usage_to_int(genai_usage),
-                    "genai_knowledge_label": genai_knowledge,
-                    "genai_knowledge": likert_5_to_int(genai_knowledge),
-                    "formal_ai_training": formal_ai_training,
+                    "llm_language_usage": llm_language_usage,
                     "age": int(age),
                     "gender": gender,
                     "education_level": education_level,
                     "education_level_other": education_level_other if education_level_other else "",
                     "field_of_study": field_of_study,
                     "field_of_study_other": field_of_study_other if field_of_study_other else "",
-                    "learning_language_preference": learning_language_preference,
-                    "topic_interest_label": topic_interest,
-                    "topic_interest": likert_5_to_int(topic_interest),
-                    "llm_language_usage": llm_language_usage,
-                    "llm_usage_frequency": llm_usage_frequency
+                    "learning_language_preference": learning_language_preference
                 }
                 
                 # Save profile data to JSON
@@ -450,23 +472,26 @@ Section 1: Language Proficiency
 Q1. Native Language: {form_data.get('native_language', 'N/A')}
 {english_prof_line}Q{2 if current_language == "en" else 3}. Native Language Proficiency: {form_data.get('native_proficiency', 'N/A')}/7
 
-Section 2: Prior Knowledge of Generative AI
---------------------------------------------
-Q{3 + q_offset}. Familiarity with GenAI Tools: {form_data.get('genai_familiarity_label', 'N/A')} (coded: {form_data.get('genai_familiarity', 'N/A')})
-Q{4 + q_offset}. Previous Usage: {form_data.get('genai_usage_label', 'N/A')} (coded: {form_data.get('genai_usage', 'N/A')})
-Q{5 + q_offset}. Self-Assessed Knowledge: {form_data.get('genai_knowledge_label', 'N/A')} (coded: {form_data.get('genai_knowledge', 'N/A')})
-Q{6 + q_offset}. Formal AI Training: {form_data.get('formal_ai_training', 'N/A')}
+Section 2: Subject Knowledge and Learning Background
+-----------------------------------------------------
+Q{3 + q_offset}. Biology/Medicine Education: {form_data.get('biology_education', 'N/A')}
+Q{4 + q_offset}. Cancer Biology Familiarity: {form_data.get('cancer_biology_familiarity_label', 'N/A')} (coded: {form_data.get('cancer_biology_familiarity', 'N/A')})
+Q{5 + q_offset}. Cancer Biology Knowledge: {form_data.get('cancer_biology_knowledge_label', 'N/A')} (coded: {form_data.get('cancer_biology_knowledge', 'N/A')})
+Q{6 + q_offset}. Topic Interest: {form_data.get('topic_interest_label', 'N/A')} (coded: {form_data.get('topic_interest', 'N/A')})
 
-Section 3: Demographics and Background
+Section 3: AI Assistant Experience
+-----------------------------------
+Q{7 + q_offset}. AI Assistant Familiarity: {form_data.get('genai_familiarity_label', 'N/A')} (coded: {form_data.get('genai_familiarity', 'N/A')})
+Q{8 + q_offset}. AI Usage Frequency: {form_data.get('genai_usage_label', 'N/A')} (coded: {form_data.get('genai_usage', 'N/A')})
+Q{9 + q_offset}. AI Language Usage: {form_data.get('llm_language_usage', 'N/A')}
+
+Section 4: Demographics and Background
 ---------------------------------------
-Q{7 + q_offset}. Age: {form_data.get('age', 'N/A')}
-Q{8 + q_offset}. Gender: {form_data.get('gender', 'N/A')}
-Q{9 + q_offset}. Education Level: {form_data.get('education_level', 'N/A')}{f" ({form_data.get('education_level_other')})" if form_data.get('education_level_other') else ''}
-Q{10 + q_offset}. Field of Study: {form_data.get('field_of_study', 'N/A')}{f" ({form_data.get('field_of_study_other')})" if form_data.get('field_of_study_other') else ''}
-Q{11 + q_offset}. Learning Language Preference: {form_data.get('learning_language_preference', 'N/A')}
-Q{12 + q_offset}. Topic Interest: {form_data.get('topic_interest_label', 'N/A')} (coded: {form_data.get('topic_interest', 'N/A')})
-Q{13 + q_offset}. LLM Language Usage: {form_data.get('llm_language_usage', 'N/A')}
-Q{14 + q_offset}. LLM Usage Frequency: {form_data.get('llm_usage_frequency', 'N/A')}
+Q{10 + q_offset}. Age: {form_data.get('age', 'N/A')}
+Q{11 + q_offset}. Gender: {form_data.get('gender', 'N/A')}
+Q{12 + q_offset}. Education Level: {form_data.get('education_level', 'N/A')}{f" ({form_data.get('education_level_other')})" if form_data.get('education_level_other') else ''}
+Q{13 + q_offset}. Field of Study: {form_data.get('field_of_study', 'N/A')}{f" ({form_data.get('field_of_study_other')})" if form_data.get('field_of_study_other') else ''}
+Q{14 + q_offset}. Learning Language Preference: {form_data.get('learning_language_preference', 'N/A')}
 """
         
         st.text_area(

@@ -184,7 +184,7 @@ def create_structured_prompt(
 
     # ── prompt ----------------------------------------------------- #
     system_msg = (
-        f"You are a teaching assistant for a Generative AI course. "
+        f"You are a teaching assistant for a Cancer Biology course. "
         f"CRITICAL: Respond ONLY in {target_language}. "
         f"Use the provided lecture content to explain concepts clearly."
     )
@@ -194,7 +194,7 @@ def create_structured_prompt(
         "System": system_msg,
 
         # ── ROLE & OBJECTIVE ────────────────────────────────────────
-        "Role": "Generative AI Tutor",
+        "Role": "Cancer Biology Tutor",
         "Objective": (
             f"Provide a clear, educational explanation of *{slide}* based on the lecture materials."
         ),
@@ -425,7 +425,7 @@ def main() -> None:
     # 1) Fast‑test stub ---------------------------------------------------
     if FAST_TEST_MODE:
         st.session_state.exported_images = [
-            ROOT / "uploads" / "ppt" / "picture" / "Slide_1 of What is Generative AI.png"
+            ROOT / "uploads" / "ppt" / "picture" / "Slide_1 Genetics of Cancer.jpg"
         ]
         st.session_state.transcription_text = (
             "This is a mock transcription for fast testing."

@@ -818,7 +818,7 @@ The AI assistant has access to all {config.course.total_slides} slides and the f
             if not st.session_state.get("exported_images"):
                 slides_dir = UPLOAD_DIR_PPT / config.course.slides_directory
                 if slides_dir.exists():
-                    slide_files = list(slides_dir.glob("Slide_* of What is Generative AI.png"))
+                    slide_files = list(slides_dir.glob("Slide_* Genetics of Cancer.jpg"))
                     if slide_files:
                         # Sort numerically by extracting the number from the filename
                         def extract_slide_number(path):

@@ -21,18 +21,18 @@ class CourseConfig:
     """Configuration for the current course/study topic."""
     
     # Core course information
-    course_title: str = "Introduction to Generative AI"
-    course_short_name: str = "Generative AI"  # Used in shorter contexts
-    subject_area: str = "Artificial Intelligence"  # General subject area
+    course_title: str = "Introduction to Cancer Biology"
+    course_short_name: str = "Cancer Biology"  # Used in shorter contexts
+    subject_area: str = "Cancer Biology"  # General subject area
     
     # File and content references
-    transcription_filename: str = "turbo_transcription_What is Generative AI.txt"
-    video_filename: str = "What is Generative AI.mp4"
+    transcription_filename: str = "turbo_transcription_Introduction to Cancer Biology.txt"
+    video_filename: str = "Introduction to Cancer Biology.mp4"
     slides_directory: str = "picture"  # Subdirectory in uploads/ppt/
     
     # Study-specific settings
-    total_slides: int = 15  # Expected number of slides
-    session_duration_minutes: int = 60  # Expected session duration
+    total_slides: int = 27  # Expected number of slides
+    session_duration_minutes: int = 90  # Expected session duration
 
 
 @dataclass  
