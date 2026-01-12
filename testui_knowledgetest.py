@@ -143,6 +143,21 @@ else:
                 if q5 == correct_answers["knowledge_q5"]:
                     score += 1
 
+                # Build result dictionary for saving
+                answers_dict = {
+                    "q1": {"user": q1, "correct": q1 == correct_answers["knowledge_q1"]},
+                    "q2": {"user": q2, "correct": q2 == correct_answers["knowledge_q2"]},
+                    "q3": {"user": q3, "correct": q3 == correct_answers["knowledge_q3"]},
+                    "q4": {"user": q4, "correct": q4 == correct_answers["knowledge_q4"]},
+                    "q5": {"user": q5, "correct": q5 == correct_answers["knowledge_q5"]},
+                }
+                
+                result = {
+                    "answers": answers_dict,
+                    "score_total": float(score),
+                    "max_score": 5.0,
+                }
+
                 # Store the score in session state to mark test as completed
                 st.session_state.score = score
                 st.session_state.test_submitted = True
@@ -171,8 +186,8 @@ Total Score: {score}/5
                 # Get or create a session manager instance
                 session_manager = get_session_manager()
 
-                # Save the test results using the session manager
-                file_path = session_manager.save_knowledge_test_results(result_summary)
+                # Save the test results using the session manager (pass dictionary, not string)
+                file_path = session_manager.save_knowledge_test_results(result)
 
                 # Get the session info for display
                 session_info = session_manager.get_session_info()
