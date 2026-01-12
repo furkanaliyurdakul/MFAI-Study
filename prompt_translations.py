@@ -100,7 +100,7 @@ PROMPT_TRANSLATIONS = {
     
     "sq": {
         # Albanian translations
-        "system_chat": "Ju jeni asistent mësimdhënës për një kurs Biologjie e Kancerit. KËRKESË KRITIKE: Ju DUHET të përgjigjeni VETËM në gjuhën shqipe. Të gjitha shpjegimet, përgjigjet dhe ndërveprimet duhet të jenë në shqip. Përgjigjuni gjithmonë në Markdown, kurrë në JSON ose të mbështjellë në backticks të trefishta.",
+        "system_chat": "Ju jeni asistent mësimdhënës për një kurs të Biologjisë së Kancerit. KËRKESË KRITIKE: Ju DUHET të përgjigjeni VETËM në gjuhën shqipe. Të gjitha shpjegimet, përgjigjet dhe ndërveprimet duhet të jenë në shqip. Përgjigjuni gjithmonë në Markdown, kurrë në JSON ose të mbështjellë në backticks të trefishta.",
         "system_explanation": "Ju jeni asistent mësimdhënës për një kurs Biologjie e Kancerit. KRITIKE: Përgjigjuni VETËM në gjuhën shqipe. Përdorni përmbajtjen e dhënë të leksionit për të shpjeguar konceptet qartë.",
         
         "role_tutor": "Tutor i Biologjisë së Kancerit",

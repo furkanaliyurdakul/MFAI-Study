@@ -16,6 +16,24 @@ from typing import Dict, List
 DEBUG_MODE = False  # Toggle this to enable/disable debug logging
 
 
+# ═══════════════════════════════════════════════════════════════════
+# AI MODEL CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════
+@dataclass
+class ModelConfig:
+    """Configuration for AI model selection and parameters."""
+    
+    # Primary model for learning interactions
+    learning_model: str = "gemini-2.5-flash"
+    
+    # Model for pilot testing (can be different for testing purposes)
+    pilot_test_model: str = "gemini-3-flash-preview"
+    
+    # Model parameters
+    temperature: float = 0.2
+    top_p: float = 0.95
+
+
 @dataclass
 class CourseConfig:
     """Configuration for the current course/study topic."""
@@ -228,6 +246,7 @@ class Config:
     """Main configuration class that combines all config sections."""
     
     def __init__(self):
+        self.model = ModelConfig()
         self.course = CourseConfig()
         self.platform = PlatformConfig() 
         self.ui_text = UITextConfig()

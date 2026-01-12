@@ -10,7 +10,7 @@ LANGUAGE_NAMES = {
     "hi": "Hindi"
 }
 
-def get_get_current_language()():
+def get_get_current_language():
     """Get current language from session state."""
     return st.session_state.get("language_code", "en")
 

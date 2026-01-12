@@ -93,22 +93,22 @@ You just used an AI learning assistant in **{language_name}**. As you answer the
 )
 
 st.markdown(
-    """
-This questionnaire evaluates **your experience with the AI learning assistant** (the chat interface and AI responses you just used).
+    f"""
+This questionnaire evaluates **your experience with the AI learning assistant in {language_name}** (the chat interface and AI responses you just used).
 
 **What to focus on when answering:**
-- The AI assistant's explanations and conversation
-- How easy it was to interact with the AI
-- The quality and helpfulness of the AI's responses  
-- Your overall learning experience with the AI
+- Your typical experience with AI tools (often in English)
+- How you normally learn new technical material
+- What felt different or similar about learning in {language_name}
+
+This comparison is valuable for our research on language effects in AI-assisted learning.
 
 For each item, select the point on the scale that best represents your impression. The scale goes from **negative attributes on the left** to **positive attributes on the right**.
 
-Please decide spontaneously. Don't think too long about your decision to make sure that you convey your original impression.
+Don't think too long about your decision to make sure that you convey your original impression.
 
 Sometimes you may not be completely sure about your agreement with a particular attribute or you may find that the attribute does not apply completely. Nevertheless, please tick a circle in every line. It is your personal opinion that counts.
-
-Please remember: there is no wrong or right answer!
+There are no wrong or right answers!
 """
 )
 
@@ -267,27 +267,39 @@ session_info = session_manager.get_session_info()
 lang_code = session_info.get("language_code") or st.session_state.get("language_code", "en")
 is_english_condition = (lang_code == "en")
 
-st.markdown("#### Optional feedback (highly appreciated)")
-st.write(
-    "If you noticed anything unusual or important during the session, please write it here.\n\n"
-    "**Helpful topics include:**\n"
-    "- **Language quality:** Was the AI's language natural and correct? Any strange translations or mixed language?\n"
-    "- **Clarity:** Were explanations clear and easy to follow?\n"
-    "- **Trust/accuracy:** Any answers that seemed wrong, misleading, or overconfident?\n"
-    "- **Usability:** Any technical issues, slow responses, or confusing UI elements?\n"
-    "- **Anything else:** Any thought that could help us interpret your results."
-)
+st.markdown("#### Your Feedback (highly appreciated)")
 
 if not is_english_condition:
-    st.info(
-        "**Comparison prompt (native-language condition):**\n"
-        "- Compared to how you normally use ChatGPT/Gemini, did this session feel **easier, harder, or about the same**? Why?\n"
-        "- Did using your native language change your confidence, speed, or understanding?"
+    st.markdown(
+        f"""
+**Please share your honest thoughts about learning in {language_name} with the AI assistant.**
+
+**Key questions for our research:**
+- Compared to using AI tools in English (like ChatGPT/Gemini), did this feel **easier, harder, or about the same**? Why?
+- Did learning in {language_name} affect your confidence, understanding speed, or ability to ask questions?
+- Was the AI's {language_name} natural and correct, or did you notice translation issues or mixed language?
+
+**Also valuable to mention:**
+- Clarity of explanations, accuracy concerns, or anything that felt misleading
+- Technical issues, slow responses, or usability problems
+- Any other thoughts that could help us understand your experience
+"""
     )
 else:
-    st.info(
-        "**Optional reflection (English condition):**\n"
-        "If you have used AI tools before, did this session feel similar to your usual usage? What felt different?"
+    st.markdown(
+        """
+**Please share your honest thoughts about learning with the AI assistant.**
+
+**Key questions for our research:**
+- If you've used AI tools before (ChatGPT, Gemini, etc.), how did this session compare? Easier, harder, or similar?
+- Did anything about the AI's English explanations affect your learning (clarity, technical terms, etc.)?
+- Would you have preferred learning in a different language? Why or why not?
+
+**Also valuable to mention:**
+- Accuracy concerns, misleading information, or anything that felt unclear
+- Technical issues, slow responses, or usability problems  
+- Any other thoughts that could help us understand your experience
+"""
     )
 
 # --- comment widget -----------------------------------------

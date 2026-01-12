@@ -691,7 +691,7 @@ elif st.session_state.current_page == "learning":
             if DEBUG_MODE:
                 print("🔧 DEBUG: Creating new Gemini chat session")
             st.session_state.gemini_chat = client.chats.create(
-                model="gemini-2.5-flash",
+                model=config.model.learning_model,
                 history=[]
             )
             st.session_state.gemini_chat_initialized = False
@@ -1397,12 +1397,12 @@ elif st.session_state.current_page == "pilot_smoke_test":
             t0 = time.perf_counter()
             try:
                 resp = client.models.generate_content(
-                    model="gemini-3-flash-preview",
+                    model=config.model.pilot_test_model,
                     contents=content,
                     config=types.GenerateContentConfig(
                         system_instruction=system,
-                        temperature=0.2,
-                        top_p=0.95,
+                        temperature=config.model.temperature,
+                        top_p=config.model.top_p,
                     )
                 )
                 latency_ms = int((time.perf_counter() - t0) * 1000)
