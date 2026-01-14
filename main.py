@@ -907,7 +907,14 @@ elif st.session_state.current_page == "learning":
             st.header("LLM Chat")
             for msg in st.session_state.messages:
                 with st.chat_message(msg["role"]):
-                    st.markdown(msg["content"], unsafe_allow_html=True)
+                    # Decode Unicode escape sequences for proper character display (e.g., Turkish)
+                    content = msg["content"]
+                    if isinstance(content, str) and "\\u" in content:
+                        try:
+                            content = content.encode('utf-8').decode('unicode_escape')
+                        except:
+                            pass  # Keep original if decode fails
+                    st.markdown(content, unsafe_allow_html=True)
 
             # Chat input section (placed right after messages) ---------------------------------------
             user_chat = st.chat_input("Ask a follow‑up question …")
@@ -930,16 +937,21 @@ elif st.session_state.current_page == "learning":
                     config=content_config
                 )
                 
+                # Ensure proper Unicode handling for reply text
+                reply_text = reply.text
+                if isinstance(reply_text, bytes):
+                    reply_text = reply_text.decode('utf-8')
+                
                 st.session_state.messages.extend(
                     [
                         {"role": "user", "content": user_chat},
-                        {"role": "assistant", "content": reply.text},
+                        {"role": "assistant", "content": reply_text},
                     ]
                 )
                 get_learning_logger().log_interaction(
                     interaction_type="chat",
                     user_input=user_chat,
-                    system_response=reply.text,
+                    system_response=reply_text,
                     metadata={"slide": None, "language_code": current_language()},
                 )
                 st.rerun()
@@ -968,11 +980,16 @@ elif st.session_state.current_page == "learning":
                 
                 reply = st.session_state.gemini_chat.send_message([img, prompt_json], config=content_config)
 
+                # Ensure proper Unicode handling for reply text
+                reply_text = reply.text
+                if isinstance(reply_text, bytes):
+                    reply_text = reply_text.decode('utf-8')
+
                 summary = create_summary_prompt(selected_slide)
                 st.session_state.messages.extend(
                     [
                         {"role": "user", "content": summary},
-                        {"role": "assistant", "content": reply.text},
+                        {"role": "assistant", "content": reply_text},
                     ]
                 )
                 st.session_state.learning_completed = True
@@ -982,7 +999,7 @@ elif st.session_state.current_page == "learning":
                 ll.log_interaction(
                     interaction_type="slide_explanation",
                     user_input=prompt_json,
-                    system_response=reply.text,
+                    system_response=reply_text,
                     metadata={
                         "slide": selected_slide,
                         "language_code": current_language(),
