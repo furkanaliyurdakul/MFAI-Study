@@ -36,15 +36,22 @@ if DEBUG_MODE:
 try:
     from presence_tracker import get_presence_tracker
     presence = get_presence_tracker(max_concurrent=2)  # Adjust max as needed
-    if presence:
-        print("✅ Presence tracker initialized")
-    else:
-        print("⚠️ Presence tracker returned None")
+    # Only log on actual creation, not on every rerun
+    if presence and not st.session_state.get("_presence_logged", False):
+        print("✅ Presence tracker created (first time)")
+        st.session_state["_presence_logged"] = True
 except Exception as e:
     presence = None
     print(f"⚠️ Presence tracker unavailable: {e}")
     import traceback
     traceback.print_exc()
+
+# Debug: Track rerun count to detect infinite loops
+if "_rerun_count" not in st.session_state:
+    st.session_state["_rerun_count"] = 0
+st.session_state["_rerun_count"] += 1
+if st.session_state["_rerun_count"] > 10:
+    print(f"⚠️ WARNING: {st.session_state['_rerun_count']} reruns detected - possible infinite loop!")
 
 # ── Initialize Session State (IMMEDIATELY AFTER AUTH) ─────────
 def ensure_session_state_initialized():
@@ -277,15 +284,17 @@ if not st.session_state.get("course_content_loaded", False):
 if presence and credential_config and "language_code" in st.session_state and st.session_state.get("session_registered", False):
     session_info = sm.get_session_info()
     current_page = st.session_state.get("current_page", "home")
-    print(f"📡 Injecting heartbeat for session {session_info['session_id']}, user {credential_config.username}, page {current_page}")
+    # Only log heartbeat on first rerun of each page
+    heartbeat_key = f"_heartbeat_logged_{current_page}"
+    if not st.session_state.get(heartbeat_key, False):
+        print(f"📡 Heartbeat active for session {session_info['session_id']}, page {current_page}")
+        st.session_state[heartbeat_key] = True
     presence.inject_heartbeat(
         session_id=session_info["session_id"],
         user_id=credential_config.username,
         language_code=st.session_state["language_code"],
         current_page=current_page
     )
-else:
-    print(f"⚠️ Heartbeat NOT injected - presence: {presence is not None}, credential: {credential_config is not None}, language: {'language_code' in st.session_state}")
 
 # ── Scroll to Top on Page Navigation ──────────────────────────
 # Only scroll when user actually navigates to a different page, not on every rerun
