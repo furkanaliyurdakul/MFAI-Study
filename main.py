@@ -625,10 +625,12 @@ elif st.session_state.current_page == "profile_survey":
     import importlib
     import testui_profilesurvey
     
-    # Reload once per session to ensure fresh module state
-    if "profile_module_loaded" not in st.session_state:
+    # Skip reload on very first visit to avoid duplicate key error
+    # Reload on all subsequent interactions to keep widgets working
+    if st.session_state.get("profile_visited", False):
         importlib.reload(testui_profilesurvey)
-        st.session_state.profile_module_loaded = True
+    else:
+        st.session_state.profile_visited = True
 
     # The module handles its own review display
     if st.session_state.get("show_review", False):
@@ -1095,10 +1097,12 @@ elif st.session_state.current_page == "knowledge_test":
     import importlib
     import testui_knowledgetest
     
-    # Reload once per session to ensure fresh module state
-    if "knowledge_module_loaded" not in st.session_state:
+    # Skip reload on very first visit to avoid duplicate key error
+    # Reload on all subsequent interactions to keep widgets working
+    if st.session_state.get("knowledge_visited", False):
         importlib.reload(testui_knowledgetest)
-        st.session_state.knowledge_module_loaded = True
+    else:
+        st.session_state.knowledge_visited = True
 
     if not st.session_state.profile_completed and not DEV_MODE:
         st.warning("Please complete the Student Profile Survey first.")
@@ -1132,10 +1136,12 @@ elif st.session_state.current_page == "ueq_survey":
     import importlib
     import testui_ueqsurvey
     
-    # Reload once per session to ensure fresh module state
-    if "ueq_module_loaded" not in st.session_state:
+    # Skip reload on very first visit to avoid duplicate key error
+    # Reload on all subsequent interactions to keep widgets working
+    if st.session_state.get("ueq_visited", False):
         importlib.reload(testui_ueqsurvey)
-        st.session_state.ueq_module_loaded = True
+    else:
+        st.session_state.ueq_visited = True
 
     if not st.session_state.profile_completed and not DEV_MODE:
         st.warning("Please complete the Student Profile Survey first.")
