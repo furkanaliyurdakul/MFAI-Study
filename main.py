@@ -131,6 +131,32 @@ from google.genai import types
 DOCS_DIR = Path(__file__).parent / "docs"
 CONSENT_PDF = DOCS_DIR / "Participant_Information_and_Consent.pdf"
 
+# ── Cached image loader for slide preview ──────────────────────
+@st.cache_data(show_spinner=False)
+def load_slide_image(slide_path: str):
+    """Load and cache slide image to prevent repeated file reads.
+    
+    Args:
+        slide_path: String path to the slide image file
+        
+    Returns:
+        PIL Image object
+    """
+    return Image.open(slide_path)
+
+@st.cache_data(show_spinner=False)
+def load_video_file(video_path: str):
+    """Load and cache video file to prevent repeated file reads.
+    
+    Args:
+        video_path: String path to the video file
+        
+    Returns:
+        Video bytes
+    """
+    with open(video_path, "rb") as video_file:
+        return video_file.read()
+
 from Gemini_UI import (
     TRANSCRIPTION_DIR,
     UPLOAD_DIR_AUDIO,
@@ -1076,12 +1102,15 @@ elif st.session_state.current_page == "learning":
                     st.stop()
                 
                 try:
-                    # Use PIL to open and verify the image
-                    img = Image.open(slide_path)
+                    # Load image with caching to prevent repeated file reads
+                    img = load_slide_image(str(slide_path))
                     caption = str(slide_path.name) if DEV_MODE else None
-                    st.image(img, caption=caption, use_column_width=True)
+                    st.image(img, caption=caption, use_container_width=True)
                 except Exception as e:
-                    st.exception(e)
+                    if DEV_MODE:
+                        st.exception(e)
+                    else:
+                        st.error("Unable to display slide image.")
                     st.stop()
 
             # Video preview functionality
@@ -1089,8 +1118,8 @@ elif st.session_state.current_page == "learning":
             if video_path.exists():
                 st.subheader("Lecture Recording")
                 try:
-                    with open(video_path, "rb") as video_file:
-                        video_bytes = video_file.read()
+                    # Load video with caching to prevent repeated file reads
+                    video_bytes = load_video_file(str(video_path))
                     st.video(video_bytes)
                     if DEV_MODE:
                         st.caption(f"{config.course.course_title} - Full Lecture")
