@@ -1110,10 +1110,14 @@ elif st.session_state.current_page == "learning":
                     caption = str(slide_path.name) if DEV_MODE else None
                     st.image(img, caption=caption, use_container_width=True)
                 except Exception as e:
+                    st.error(f"Unable to display slide image: {str(e)}")
                     if DEV_MODE:
                         st.exception(e)
-                    else:
-                        st.error("Unable to display slide image.")
+                        st.write(f"Attempted to load: {slide_path}")
+                        st.write(f"Path type: {type(slide_path)}")
+                        st.write(f"File exists: {slide_path.exists()}")
+                    import traceback
+                    traceback.print_exc()  # Print to logs
                     st.stop()
 
             # Video preview functionality
