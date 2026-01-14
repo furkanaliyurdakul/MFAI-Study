@@ -132,9 +132,12 @@ DOCS_DIR = Path(__file__).parent / "docs"
 CONSENT_PDF = DOCS_DIR / "Participant_Information_and_Consent.pdf"
 
 # ── Cached image loader for slide preview ──────────────────────
-@st.cache_data(show_spinner=False)
+@st.cache_resource(show_spinner=False)
 def load_slide_image(slide_path: str):
     """Load and cache slide image to prevent repeated file reads.
+    
+    Uses cache_resource instead of cache_data because PIL Image objects
+    cannot be serialized.
     
     Args:
         slide_path: String path to the slide image file
