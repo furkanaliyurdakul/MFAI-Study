@@ -805,8 +805,12 @@ elif st.session_state.current_page == "learning":
         else:
             # No upload access: Use pre-processed course content
             print("🔧 DEBUG: Starting no-upload mode file loading")
-            st.sidebar.header("Course Content")
-            st.sidebar.info(f"Ask questions or request explanations about any concept")
+            
+            # Show sidebar info only once to avoid infinite rerun
+            if "sidebar_course_info_shown" not in st.session_state:
+                st.sidebar.header("Course Content")
+                st.sidebar.info(f"Ask questions or request explanations about any concept")
+                st.session_state.sidebar_course_info_shown = True
             
             # Load pre-transcribed course content (cached)
             if DEV_MODE:
