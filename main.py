@@ -911,7 +911,8 @@ elif st.session_state.current_page == "learning":
                     content = msg["content"]
                     if isinstance(content, str) and "\\u" in content:
                         try:
-                            content = content.encode('utf-8').decode('unicode_escape')
+                            import codecs
+                            content = codecs.decode(content, 'unicode_escape')
                         except:
                             pass  # Keep original if decode fails
                     st.markdown(content, unsafe_allow_html=True)
