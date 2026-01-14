@@ -1108,7 +1108,7 @@ elif st.session_state.current_page == "learning":
                     # Load image with caching to prevent repeated file reads
                     img = load_slide_image(str(slide_path))
                     caption = str(slide_path.name) if DEV_MODE else None
-                    st.image(img, caption=caption, use_container_width=True)
+                    st.image(img, caption=caption, use_column_width=True)
                 except Exception as e:
                     st.error(f"Unable to display slide image: {str(e)}")
                     if DEV_MODE:
