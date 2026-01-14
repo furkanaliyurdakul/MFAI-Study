@@ -135,8 +135,6 @@ else:
                 st.rerun()
         with col2:
             if st.button("Confirm Submission"):
-                print(f"🎯 KNOWLEDGE TEST: Confirm Submission button clicked")
-                print(f"🎯 Answers: q1={q1}, q2={q2}, q3={q3}, q4={q4}, q5={q5}")
                 # All questions are single-choice
                 if q1 == correct_answers["knowledge_q1"]:
                     score += 1
