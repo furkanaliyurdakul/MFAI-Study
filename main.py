@@ -622,9 +622,13 @@ Thank you for helping us understand how language affects AI-assisted learning!
 # PROFILE SURVEY  – writes profile text & dict to session_state
 # ------------------------------------------------------------------------
 elif st.session_state.current_page == "profile_survey":
-    #import importlib
+    import importlib
     import testui_profilesurvey
-    #importlib.reload(testui_profilesurvey)
+    
+    # Reload once per session to ensure fresh module state
+    if "profile_module_loaded" not in st.session_state:
+        importlib.reload(testui_profilesurvey)
+        st.session_state.profile_module_loaded = True
 
     # The module handles its own review display
     if st.session_state.get("show_review", False):
@@ -1088,11 +1092,13 @@ elif st.session_state.current_page == "learning":
 # KNOWLEDGE TEST  – simple wrapper around *testui_knowledgetest*
 # ------------------------------------------------------------------------
 elif st.session_state.current_page == "knowledge_test":
-    #import importlib
-
+    import importlib
     import testui_knowledgetest
-
-    #importlib.reload(testui_knowledgetest)
+    
+    # Reload once per session to ensure fresh module state
+    if "knowledge_module_loaded" not in st.session_state:
+        importlib.reload(testui_knowledgetest)
+        st.session_state.knowledge_module_loaded = True
 
     if not st.session_state.profile_completed and not DEV_MODE:
         st.warning("Please complete the Student Profile Survey first.")
@@ -1123,11 +1129,13 @@ elif st.session_state.current_page == "knowledge_test":
 # UEQ SURVEY  – wrapper around *testui_ueqsurvey*
 # ------------------------------------------------------------------------
 elif st.session_state.current_page == "ueq_survey":
-    #import importlib
-
+    import importlib
     import testui_ueqsurvey
-
-    #importlib.reload(testui_ueqsurvey)
+    
+    # Reload once per session to ensure fresh module state
+    if "ueq_module_loaded" not in st.session_state:
+        importlib.reload(testui_ueqsurvey)
+        st.session_state.ueq_module_loaded = True
 
     if not st.session_state.profile_completed and not DEV_MODE:
         st.warning("Please complete the Student Profile Survey first.")
