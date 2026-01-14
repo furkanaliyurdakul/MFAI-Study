@@ -105,11 +105,11 @@ if st.session_state.test_submitted:
     st.warning("You have already submitted this test. Your results have been saved.")
 
     # Display the saved results if available
-    if "result_summary" in st.session_state:
+    if "formatted_results" in st.session_state:
         st.success(f"You scored {st.session_state.score:.2f}/5!")
         st.markdown("### Your Test Results")
         st.markdown(
-            st.session_state.result_summary.replace("\n", "<br>"),
+            st.session_state.formatted_results,
             unsafe_allow_html=True,
         )
 else:
@@ -118,6 +118,10 @@ else:
         st.session_state.confirm_submission = False
 
     if st.button("Submit and calculate score"):
+        # Validate all questions are answered
+        if q1 is None or q2 is None or q3 is None or q4 is None or q5 is None:
+            st.warning("Please answer all questions before submitting.")
+            st.stop()
         st.session_state.confirm_submission = True
 
     if st.session_state.confirm_submission:
@@ -131,6 +135,8 @@ else:
                 st.rerun()
         with col2:
             if st.button("Confirm Submission"):
+                print(f"🎯 KNOWLEDGE TEST: Confirm Submission button clicked")
+                print(f"🎯 Answers: q1={q1}, q2={q2}, q3={q3}, q4={q4}, q5={q5}")
                 # All questions are single-choice
                 if q1 == correct_answers["knowledge_q1"]:
                     score += 1
