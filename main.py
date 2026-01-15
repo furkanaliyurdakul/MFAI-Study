@@ -134,22 +134,7 @@ DOCS_DIR = Path(__file__).parent / "docs"
 CONSENT_PDF = DOCS_DIR / "Participant_Information_and_Consent.pdf"
 
 # ── Cached image loader for slide preview ──────────────────────
-from functools import lru_cache
-
-@lru_cache(maxsize=10)  # Only cache 10 most recent slides to prevent memory overflow
-def load_slide_image(slide_path: str):
-    """Load and cache slide image with LRU eviction.
-    
-    Limits cache to 10 slides (~800-1000 MB) instead of all 37 slides (~3+ GB)
-    to prevent memory crashes on Streamlit Cloud.
-    
-    Args:
-        slide_path: String path to the slide image file
-        
-    Returns:
-        PIL Image object
-    """
-    return Image.open(slide_path)
+# NO LONGER NEEDED - images loaded once into session state instead
 
 @st.cache_data(show_spinner=False)
 def load_video_file(video_path: str):
@@ -898,6 +883,15 @@ elif st.session_state.current_page == "learning":
                         slide_files = sorted(slide_files, key=extract_slide_number)
                         st.session_state.exported_images = slide_files
                         st.session_state.slides_loaded = True
+                        
+                        # Load ALL slide images into memory ONCE (26 slides × 1MB = ~26MB total)
+                        if "slide_image_cache" not in st.session_state:
+                            st.session_state.slide_image_cache = {}
+                            for slide_file in slide_files:
+                                st.session_state.slide_image_cache[str(slide_file)] = Image.open(slide_file)
+                            if DEV_MODE:
+                                print(f"📦 Loaded {len(slide_files)} slide images into memory (~{len(slide_files)} MB)")
+                        
                         if DEV_MODE:
                             st.sidebar.success(f"✅ {len(slide_files)} slides loaded")
                     else:
@@ -1132,19 +1126,14 @@ elif st.session_state.current_page == "learning":
                 if not isinstance(slide_path, Path):
                     slide_path = Path(slide_path)
                 
-                # Check if file exists
-                if not slide_path.exists():
-                    if DEV_MODE:
-                        st.error(f"Slide not found: {slide_path.resolve()}")
-                        st.write(f"Current working directory: {Path.cwd()}")
-                        st.write(f"Looking for: {slide_path}")
-                    else:
-                        st.error("Slide content is currently unavailable.")
-                    st.stop()
-                
                 try:
-                    # Load image with caching to prevent repeated file reads
-                    img = load_slide_image(str(slide_path))
+                    # Get image from pre-loaded memory cache (no file I/O, no PIL overhead)
+                    if "slide_image_cache" in st.session_state and str(slide_path) in st.session_state.slide_image_cache:
+                        img = st.session_state.slide_image_cache[str(slide_path)]
+                    else:
+                        # Fallback: load on demand if cache miss
+                        img = Image.open(slide_path)
+                    
                     caption = str(slide_path.name) if DEV_MODE else None
                     st.image(img, caption=caption, use_column_width=True)
                 except Exception as e:
