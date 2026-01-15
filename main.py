@@ -133,21 +133,8 @@ from google.genai import types
 DOCS_DIR = Path(__file__).parent / "docs"
 CONSENT_PDF = DOCS_DIR / "Participant_Information_and_Consent.pdf"
 
-# ── Cached image loader for slide preview ──────────────────────
-# NO LONGER NEEDED - images loaded once into session state instead
-
-@st.cache_data(show_spinner=False)
-def load_video_file(video_path: str):
-    """Load and cache video file to prevent repeated file reads.
-    
-    Args:
-        video_path: String path to the video file
-        
-    Returns:
-        Video bytes
-    """
-    with open(video_path, "rb") as video_file:
-        return video_file.read()
+# ── Media files loaded once into session state ──────────────────────
+# Images and video loaded at startup to prevent memory leaks from repeated loading
 
 from Gemini_UI import (
     TRANSCRIPTION_DIR,
@@ -293,6 +280,15 @@ from Gemini_UI import load_course_content
 if not st.session_state.get("course_content_loaded", False):
     load_course_content()  # Loads slides and transcription from course files
     st.session_state["course_content_loaded"] = True
+    
+    # Load video file ONCE into session state (50 MB)
+    video_path = UPLOAD_DIR_VIDEO / config.course.video_filename
+    if video_path.exists() and "video_bytes" not in st.session_state:
+        with open(video_path, "rb") as video_file:
+            st.session_state["video_bytes"] = video_file.read()
+        if DEV_MODE:
+            print(f"🎥 Video loaded into memory ({len(st.session_state['video_bytes']) / 1024 / 1024:.1f} MB)")
+    
     if DEV_MODE:
         print(f"📚 Course content loaded: {len(st.session_state.get('exported_images', []))} slides")
 
@@ -1148,13 +1144,11 @@ elif st.session_state.current_page == "learning":
                     st.stop()
 
             # Video preview functionality
-            video_path = UPLOAD_DIR_VIDEO / config.course.video_filename
-            if video_path.exists():
+            if "video_bytes" in st.session_state:
                 st.subheader("Lecture Recording")
                 try:
-                    # Load video with caching to prevent repeated file reads
-                    video_bytes = load_video_file(str(video_path))
-                    st.video(video_bytes)
+                    # Display video from pre-loaded session state (no file I/O)
+                    st.video(st.session_state["video_bytes"])
                     if DEV_MODE:
                         st.caption(f"{config.course.course_title} - Full Lecture")
                 except Exception as e:
