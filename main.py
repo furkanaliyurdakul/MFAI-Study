@@ -50,7 +50,7 @@ except Exception as e:
 if "_rerun_count" not in st.session_state:
     st.session_state["_rerun_count"] = 0
 st.session_state["_rerun_count"] += 1
-if st.session_state["_rerun_count"] > 10:
+if st.session_state["_rerun_count"] > 100:  # Increased threshold - 10 was too sensitive
     print(f"⚠️ WARNING: {st.session_state['_rerun_count']} reruns detected - possible infinite loop!")
 
 # ── Initialize Session State (IMMEDIATELY AFTER AUTH) ─────────
@@ -923,26 +923,7 @@ elif st.session_state.current_page == "learning":
                 st.session_state.previous_slide = selected_slide
             elif st.session_state.previous_slide != selected_slide:
                 st.session_state.slide_switch_count += 1
-                prev = st.session_state.previous_slide
                 st.session_state.previous_slide = selected_slide
-                
-                # Log every switch using stderr (unbuffered)
-                sys.stderr.write(f"🔄 Slide switch #{st.session_state.slide_switch_count}: {prev} → {selected_slide}\n")
-                sys.stderr.flush()
-                
-                # Log diagnostics every 5 switches
-                if st.session_state.slide_switch_count % 5 == 0:
-                    sys.stderr.write(f"📊 DIAGNOSTICS after {st.session_state.slide_switch_count} switches:\n")
-                    sys.stderr.write(f"  - Rerun count: {st.session_state.get('_rerun_count', 0)}\n")
-                    sys.stderr.write(f"  - Current slide: {selected_slide}\n")
-                    try:
-                        import psutil
-                        process = psutil.Process()
-                        memory_mb = process.memory_info().rss / 1024 / 1024
-                        sys.stderr.write(f"  - Memory: {memory_mb:.1f} MB\n")
-                    except:
-                        sys.stderr.write(f"  - Memory: (psutil not available)\n")
-                    sys.stderr.flush()
             
             # Show diagnostics in dev mode
             if DEV_MODE:
