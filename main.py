@@ -115,6 +115,8 @@ atexit.register(lambda: page_dump(Path(sm.session_dir)))
 
 # ── std‑lib ────────────────────────────────────────────
 import os
+import sys
+import psutil
 from pathlib import Path
 from typing import Dict, List
 from datetime import datetime, timezone
@@ -913,12 +915,39 @@ elif st.session_state.current_page == "learning":
 
         # Slide selector --------------------------------------------------
         if st.session_state.exported_images:
+            # Track slide selection count for diagnostics
+            if "slide_switch_count" not in st.session_state:
+                st.session_state.slide_switch_count = 0
+            
             # Since files are already sorted numerically, create simple sequential labels
             slides = [f"Slide {i+1}" for i in range(len(st.session_state.exported_images))]
             
             selected_slide = st.sidebar.selectbox(
                 "Select a Slide", slides, key="selected_slide"
             )
+            
+            # Count slide switches (when selection changes)
+            if "previous_slide" not in st.session_state:
+                st.session_state.previous_slide = selected_slide
+            elif st.session_state.previous_slide != selected_slide:
+                st.session_state.slide_switch_count += 1
+                st.session_state.previous_slide = selected_slide
+                
+                # Log diagnostics every 5 switches
+                if st.session_state.slide_switch_count % 5 == 0:
+                    try:
+                        process = psutil.Process()
+                        memory_mb = process.memory_info().rss / 1024 / 1024
+                        print(f"📊 DIAGNOSTICS after {st.session_state.slide_switch_count} switches:")
+                        print(f"  - Memory: {memory_mb:.1f} MB")
+                        print(f"  - Rerun count: {st.session_state.get('_rerun_count', 0)}")
+                        print(f"  - Current slide: {selected_slide}")
+                    except Exception as e:
+                        print(f"⚠️ Could not get diagnostics: {e}")
+            
+            # Show diagnostics in dev mode
+            if DEV_MODE:
+                st.sidebar.caption(f"Switches: {st.session_state.slide_switch_count}")
             
             # Show current slide filename for debugging
             if selected_slide:
