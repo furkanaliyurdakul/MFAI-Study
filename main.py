@@ -134,12 +134,14 @@ DOCS_DIR = Path(__file__).parent / "docs"
 CONSENT_PDF = DOCS_DIR / "Participant_Information_and_Consent.pdf"
 
 # ── Cached image loader for slide preview ──────────────────────
-@st.cache_resource(show_spinner=False)
+from functools import lru_cache
+
+@lru_cache(maxsize=10)  # Only cache 10 most recent slides to prevent memory overflow
 def load_slide_image(slide_path: str):
-    """Load and cache slide image to prevent repeated file reads.
+    """Load and cache slide image with LRU eviction.
     
-    Uses cache_resource instead of cache_data because PIL Image objects
-    cannot be serialized.
+    Limits cache to 10 slides (~800-1000 MB) instead of all 37 slides (~3+ GB)
+    to prevent memory crashes on Streamlit Cloud.
     
     Args:
         slide_path: String path to the slide image file
