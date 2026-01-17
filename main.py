@@ -543,7 +543,7 @@ You have been assigned to use the AI assistant in **{language_names.get(current_
 • You should ask questions and chat with the AI in {language_names.get(current_language(), 'English')}  
 • We are comparing learning outcomes across different language groups
 
-**Your role**: Use the AI naturally to learn the material. There are no minimum interactions required—explore as much or as little as helpful for your learning.
+**Your role**: Use the AI naturally to learn the material. There are no minimum interactions required; explore as much or as little as helpful for your learning.
 
 ---
 When you are ready, click **"Start the Student Profile Survey"** below.  
@@ -914,16 +914,8 @@ elif st.session_state.current_page == "learning":
                 st.session_state.slide_switch_count = 0
             
             # Selected slide will be set in Preview section
-            # Just track switches here if needed
             if "selected_slide" in st.session_state:
                 selected_slide = st.session_state.selected_slide
-                
-                # Count slide switches (when selection changes)
-                if "previous_slide" not in st.session_state:
-                    st.session_state.previous_slide = selected_slide
-                elif st.session_state.previous_slide != selected_slide:
-                    st.session_state.slide_switch_count += 1
-                    st.session_state.previous_slide = selected_slide
 
         # Check if all resources are ready (used by chat and explain button)
         ready = (
@@ -1072,11 +1064,20 @@ elif st.session_state.current_page == "learning":
             if st.session_state.exported_images:
                 slides = [f"Slide {i+1}" for i in range(len(st.session_state.exported_images))]
                 
+                # Callback to force immediate rerun when slide changes
+                def on_slide_change():
+                    # Track the change
+                    new_slide = st.session_state.selected_slide
+                    if st.session_state.get("previous_slide") != new_slide:
+                        st.session_state.slide_switch_count = st.session_state.get("slide_switch_count", 0) + 1
+                        st.session_state.previous_slide = new_slide
+                
                 selected_slide = st.selectbox(
                     "Select slide:",
                     slides,
                     key="selected_slide",
-                    help="Choose which slide to view and explain"
+                    help="Choose which slide to view and explain",
+                    on_change=on_slide_change
                 )
                 
                 # Show diagnostics in dev mode
