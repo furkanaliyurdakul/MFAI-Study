@@ -201,6 +201,8 @@ for q in questions:
 st.markdown("---")
 st.markdown("### Final Step: Your Feedback")
 
+st.info("💡 Your written feedback is the most valuable part of this study. It helps us understand whether AI creates language-based inequalities in education.")
+
 # Determine language condition from session_manager
 session_info = session_manager.get_session_info()
 lang_code = session_info.get("language_code") or st.session_state.get("language_code", "en")
@@ -209,33 +211,25 @@ is_english_condition = (lang_code == "en")
 if not is_english_condition:
     st.markdown(
         f"""
-**Please share your honest thoughts about learning in {language_name} with the AI assistant** (optional but highly appreciated):
+**Please answer these two questions about your experience learning in {language_name}:**
 
-**Key questions for our research:**
-- Compared to using AI tools in English (like ChatGPT/Gemini), did this feel **easier, harder, or about the same**? Why?
-- Did learning in {language_name} affect your confidence, understanding speed, or ability to ask questions?
-- Was the AI's {language_name} natural and correct, or did you notice translation issues or mixed language?
+**1. Language Comparison (most important):**  
+If you had learned this material using AI in **English** instead of {language_name}, would your learning experience have been **better, worse, or about the same**? Please explain why — be specific about what would change (e.g., understanding, confidence, speed, question quality, AI response quality).
 
-**Also valuable to mention:**
-- Clarity of explanations, accuracy concerns, or anything that felt misleading
-- Technical issues, slow responses, or usability problems
-- Any other thoughts that could help us understand your experience
+**2. What affected your experience?**  
+Mention anything that stood out — good or bad — about using AI in {language_name}. Examples: translation issues, unnatural phrasing, mixed languages, clarity problems, surprising quality, preference for English/native language, technical issues, etc.
 """
     )
 else:
     st.markdown(
         """
-**Please share your honest thoughts about learning with the AI assistant** (optional but highly appreciated):
+**Please answer these two questions about your experience learning in English:**
 
-**Key questions for our research:**
-- If you've used AI tools before (ChatGPT, Gemini, etc.), how did this session compare? Easier, harder, or similar?
-- Did anything about the AI's English explanations affect your learning (clarity, technical terms, etc.)?
-- Would you have preferred learning in a different language? Why or why not?
+**1. Language and Learning (most important):**  
+Do you think your learning experience would have been **different** if the AI had responded in a **non-native language** you speak? Would it have been better, worse, or similar? Why? (If you only speak English, imagine learning in a language you studied at school.)
 
-**Also valuable to mention:**
-- Accuracy concerns, misleading information, or anything that felt unclear
-- Technical issues, slow responses, or usability problems  
-- Any other thoughts that could help us understand your experience
+**2. What affected your experience?**  
+Mention anything that stood out — good or bad — about using the AI assistant. Examples: explanation clarity, confusing terminology, accuracy concerns, response quality, technical issues, comparison to other AI tools you've used, etc.
 """
     )
 
