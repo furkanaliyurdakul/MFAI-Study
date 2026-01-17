@@ -235,10 +235,11 @@ Mention anything that stood out — good or bad — about using the AI assistant
 
 # --- comment widget -----------------------------------------
 comment_txt = st.text_area(
-    "Your feedback (optional):",
-    placeholder="Write your feedback here...",
+    "Your feedback (required):",
+    placeholder="Please answer the two questions above...",
     key="extra_comment",
-    height=150
+    height=200,
+    help="Your written feedback is essential for understanding language effects in AI learning"
 )
 
 st.markdown("---")
@@ -253,8 +254,16 @@ if st.button("✅ Finish Interview", type="primary", use_container_width=True):
         st.warning(f"Unanswered questions: {', '.join([f'Q{i}' for i in missing[:5]])}{'...' if len(missing) > 5 else ''}")
         st.stop()
     
-    # Get comment (if any)
+    # Validate comment is provided
     comment = (comment_txt or "").strip()
+    if not comment:
+        st.error("⚠️ Please provide your written feedback above. Your insights about language comparison are essential for this research.")
+        st.stop()
+    
+    # Check minimum length (at least 50 characters to ensure substantive response)
+    if len(comment) < 50:
+        st.error("⚠️ Please provide more detailed feedback (at least a few sentences). Your comparison insights are crucial for understanding language effects.")
+        st.stop()
     
     # Collect all answers
     answers_dict = {
@@ -270,7 +279,7 @@ if st.button("✅ Finish Interview", type="primary", use_container_width=True):
     file_path = sm.save_ueq(
         answers=answers_dict,
         benchmark={"means": bench["means"], "grades": bench["grades"]},
-        free_text=comment if comment else None
+        free_text=comment
     )
     
     # Mark as submitted and completed
@@ -283,8 +292,7 @@ if st.button("✅ Finish Interview", type="primary", use_container_width=True):
     
     # Show success message
     st.success(f"✅ Thank you! Your responses have been saved successfully!")
-    if comment:
-        st.success("💬 Your feedback has been included.")
+    st.success("💬 Your feedback has been recorded and is invaluable for this research.")
     st.caption(f"Pseudonymized ID: {fake_name}")
     
     # Brief pause for user to see confirmation
@@ -294,4 +302,4 @@ if st.button("✅ Finish Interview", type="primary", use_container_width=True):
     # Navigate to completion page
     st.rerun()
 
-st.caption("After clicking 'Finish Interview', your responses will be saved and you'll proceed to the completion page.")
+st.caption("After clicking 'Finish Interview', your responses and feedback will be saved and you'll proceed to the completion page.")
