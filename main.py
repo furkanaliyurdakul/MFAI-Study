@@ -693,19 +693,11 @@ elif st.session_state.current_page == "learning":
 
             The slides below present {config.course.total_slides} slides on {TOPIC}. The lecture is in English.
             
-            The AI assistant has the full lecture transcription and can explain any concept when the "Explain this slide" button is used. It will respond to you in {language_names.get(current_language(), 'English')}.
-
-            **How to interact:**
-
-            1. Scroll down to the slide preview section below
-            2. Select a slide from the dropdown menu next to the slide image
-            3. Click "Explain this slide" to get an AI explanation
-            4. Type follow-up questions in the chat box above
-            5. Repeat for other slides as needed
+            The AI assistant has the full lecture transcription and can explain any concept. It will respond to you in {language_names.get(current_language(), 'English')}.
 
             **What to expect:**
 
-            The AI will explain concepts from the English slides using {language_names.get(current_language(), 'English')}. This tests whether LLMs can provide quality educational explanations when the interaction language differ.
+            The AI will explain concepts from the English slides using {language_names.get(current_language(), 'English')}. This tests whether LLMs can provide quality educational explanations when the interaction language differs.
 
             Learn naturally. Ask questions when confused. Request clarification when needed. There is no target number of interactions.
 
@@ -1064,6 +1056,17 @@ elif st.session_state.current_page == "learning":
         with col_controls:
             st.markdown("---")
             st.header("Controls")
+            
+            st.markdown("""
+            **How to use:**
+            
+            1. Select a slide
+            2. Click "Explain"
+            3. Ask follow-up questions in chat
+            4. Explore other slides
+            """)
+            
+            st.markdown("---")
             
             # Slide selector
             if st.session_state.exported_images:
