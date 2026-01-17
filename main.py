@@ -689,19 +689,26 @@ elif st.session_state.current_page == "learning":
             
             st.markdown(
                 f"""
-            ### How to Use This Section
+            ### Learning Section Instructions
 
-            You can interact with the AI assistant in two ways:
+            The slides below present {config.course.total_slides} slides on {TOPIC}. The slides are in English.
+            
+            The AI assistant has the full lecture transcription and can explain any concept. It will respond to you in {language_names.get(current_language(), 'English')}.
 
-            1. **Ask about specific slides**: Click "Explain this slide" below any slide to get an explanation
-            2. **Ask your own questions**: Type questions in the chat box about any concept from the material
+            **How to interact:**
 
-            The AI assistant has access to all {config.course.total_slides} slides and the full lecture transcription.
+            1. Select a slide from the sidebar dropdown menu
+            2. Click "Explain this slide" to get an AI explanation of that slide
+            3. Type follow-up questions in the chat box below
+            4. Move to other slides and request more explanations as needed
 
-            **Expected interaction**: Please actively use the AI chat to explore concepts, ask clarifying questions, and deepen your understanding. This is the core learning experience we're studying.
-                            
-            You are learning in **{language_names.get(current_language(), 'English')}** as part of our language study. 
-            Please type your questions and read AI responses in this language.
+            **What to expect:**
+
+            The AI will explain concepts from the English slides using {language_names.get(current_language(), 'English')}. This tests whether AI systems can provide quality educational explanations when the source material and response language differ.
+
+            Learn naturally. Ask questions when confused. Request clarification when needed. There is no target number of interactions.
+
+            When you feel ready to test your understanding, click the button at the bottom to proceed to the knowledge test.
             """
             )
         
