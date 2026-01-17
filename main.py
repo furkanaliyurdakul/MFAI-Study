@@ -1031,7 +1031,8 @@ elif st.session_state.current_page == "learning":
                         img = Image.open(slide_path)
                     
                     caption = str(slide_path.name) if DEV_MODE else None
-                    st.image(img, caption=caption, use_column_width=True)
+                    # Use key to force re-render when slide changes
+                    st.image(img, caption=caption, use_column_width=True, key=f"slide_img_{idx}")
                 except Exception as e:
                     st.error(f"Unable to display slide image: {str(e)}")
                     if DEV_MODE:
