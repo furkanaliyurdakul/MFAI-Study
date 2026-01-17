@@ -697,7 +697,7 @@ elif st.session_state.current_page == "learning":
 
             **What to expect:**
 
-            The AI will explain concepts from the English slides using {language_names.get(current_language(), 'English')}. This tests whether LLMs can provide quality educational explanations when the interaction language differs.
+            The AI will explain concepts from the English slides using {language_names.get(current_language(), 'English')}. We test whether LLMs can provide quality educational explanations when the interaction language differs.
 
             Learn naturally. Ask questions when confused. Request clarification when needed. There is no target number of interactions.
 

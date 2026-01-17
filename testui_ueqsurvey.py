@@ -214,10 +214,10 @@ if not is_english_condition:
 **Please answer these two questions about your experience learning in {language_name}:**
 
 **1. Language Comparison (most important):**  
-If you had learned this material using AI in **English** instead of {language_name}, would your learning experience have been **better, worse, or about the same**? Please explain why — be specific about what would change (e.g., understanding, confidence, speed, question quality, AI response quality).
+If you had learned this material using AI in **English** instead of {language_name}, would your learning experience have been **better, worse, or about the same**? Please explain why, be specific about what would change (e.g., understanding, confidence, speed, question quality, AI response quality).
 
 **2. What affected your experience?**  
-Mention anything that stood out — good or bad — about using AI in {language_name}. Examples: translation issues, unnatural phrasing, mixed languages, clarity problems, surprising quality, preference for English/native language, technical issues, etc.
+Mention anything that stood out, good or bad, about using AI in {language_name}. Examples: translation issues, unnatural phrasing, mixed languages, clarity problems, surprising quality, preference for English/native language, technical issues, etc.
 """
     )
 else:
@@ -229,7 +229,7 @@ else:
 Do you think your learning experience would have been **different** if the AI had responded in a **non-native language** you speak? Would it have been better, worse, or similar? Why? (If you only speak English, imagine learning in a language you studied at school.)
 
 **2. What affected your experience?**  
-Mention anything that stood out — good or bad — about using the AI assistant. Examples: explanation clarity, confusing terminology, accuracy concerns, response quality, technical issues, comparison to other AI tools you've used, etc.
+Mention anything that stood out, good or bad, about using the AI assistant. Examples: explanation clarity, confusing terminology, accuracy concerns, response quality, technical issues, comparison to other AI tools you've used, etc.
 """
     )
 

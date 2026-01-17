@@ -16,7 +16,7 @@ This assessment measures your knowledge of key concepts in Cancer Biology, inclu
 
 The assessment consists of 5 questions. All questions are single-choice and worth 1 point each.
 
-**Note:** This test is for research purposes only. Your score does not affect your participation. Please answer to the best of your ability, as your honest performance helps us compare learning outcomes across different language groups.
+**Note:** This test is for research purposes only. Do not use any resources when answering the questions. Your score does not affect your participation. Please answer to the best of your ability, as your honest performance helps us compare learning outcomes across different language groups.
 
 There is no time limit.
 
