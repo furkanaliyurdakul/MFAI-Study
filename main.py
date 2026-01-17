@@ -691,20 +691,21 @@ elif st.session_state.current_page == "learning":
                 f"""
             ### Learning Section Instructions
 
-            The slides below present {config.course.total_slides} slides on {TOPIC}. The slides are in English.
+            The slides below present {config.course.total_slides} slides on {TOPIC}. The lecture is in English.
             
-            The AI assistant has the full lecture transcription and can explain any concept. It will respond to you in {language_names.get(current_language(), 'English')}.
+            The AI assistant has the full lecture transcription and can explain any concept when the "Explain this slide" button is used. It will respond to you in {language_names.get(current_language(), 'English')}.
 
             **How to interact:**
 
-            1. Select a slide from the sidebar dropdown menu
-            2. Click "Explain this slide" to get an AI explanation of that slide
-            3. Type follow-up questions in the chat box below
-            4. Move to other slides and request more explanations as needed
+            1. Scroll down to the slide preview section below
+            2. Select a slide from the dropdown menu next to the slide image
+            3. Click "Explain this slide" to get an AI explanation
+            4. Type follow-up questions in the chat box above
+            5. Repeat for other slides as needed
 
             **What to expect:**
 
-            The AI will explain concepts from the English slides using {language_names.get(current_language(), 'English')}. This tests whether AI systems can provide quality educational explanations when the source material and response language differ.
+            The AI will explain concepts from the English slides using {language_names.get(current_language(), 'English')}. This tests whether LLMs can provide quality educational explanations when the interaction language differ.
 
             Learn naturally. Ask questions when confused. Request clarification when needed. There is no target number of interactions.
 
@@ -912,51 +913,25 @@ elif st.session_state.current_page == "learning":
 
 
 
-        # Slide selector --------------------------------------------------
+        # Slide selector moved to Preview section (better UX - next to the slide image)
+        # Initialize selected_slide variable
+        selected_slide = None
         if st.session_state.exported_images:
             # Track slide selection count for diagnostics
             if "slide_switch_count" not in st.session_state:
                 st.session_state.slide_switch_count = 0
             
-            # Since files are already sorted numerically, create simple sequential labels
-            slides = [f"Slide {i+1}" for i in range(len(st.session_state.exported_images))]
-            
-            selected_slide = st.sidebar.selectbox(
-                "Select a Slide", slides, key="selected_slide"
-            )
-            
-            # Count slide switches (when selection changes)
-            if "previous_slide" not in st.session_state:
-                st.session_state.previous_slide = selected_slide
-            elif st.session_state.previous_slide != selected_slide:
-                st.session_state.slide_switch_count += 1
-                st.session_state.previous_slide = selected_slide
-            
-            # Show diagnostics in dev mode
-            if DEV_MODE:
-                st.sidebar.caption(f"Switches: {st.session_state.slide_switch_count}")
-            
-            # Show current slide filename for debugging
-            if selected_slide:
-                try:
-                    # Extract index from the dropdown selection (Slide 1 = index 0, etc.)
-                    slide_idx = int(selected_slide.split()[1]) - 1
-                    if 0 <= slide_idx < len(st.session_state.exported_images):
-                        current_file = st.session_state.exported_images[slide_idx].name
-                        st.sidebar.caption(f"File: {current_file}")
-                        
-                        # Extract actual slide number from filename for verification
-                        import re
-                        match = re.search(r'Slide_(\d+)', current_file)
-                        if match:
-                            actual_slide_num = match.group(1)
-                            expected_slide_num = str(slide_idx + 1)
-                            if actual_slide_num != expected_slide_num:
-                                st.sidebar.warning(f"⚠️ Mismatch: Selected {selected_slide} but showing Slide_{actual_slide_num}")
-                except (ValueError, IndexError):
-                    st.sidebar.error("Error parsing slide selection")
-        else:
-            selected_slide = None
+            # Selected slide will be set in Preview section
+            # Just track switches here if needed
+            if "selected_slide" in st.session_state:
+                selected_slide = st.session_state.selected_slide
+                
+                # Count slide switches (when selection changes)
+                if "previous_slide" not in st.session_state:
+                    st.session_state.previous_slide = selected_slide
+                elif st.session_state.previous_slide != selected_slide:
+                    st.session_state.slide_switch_count += 1
+                    st.session_state.previous_slide = selected_slide
 
         # Row 2: Chat messages, input, and explain button
         col_main, col_spacer = st.columns([4, 1])
@@ -1015,60 +990,6 @@ elif st.session_state.current_page == "learning":
                 )
                 st.rerun()
 
-            # Generate explanation button (placed after chat input) --------------------------------
-            ready = (
-                st.session_state.transcription_text
-                and st.session_state.exported_images
-                and st.session_state.profile_completed  # Just check if they did the survey
-            )
-            if ready and selected_slide and st.button(f"Explain this slide"):
-                s_idx = int(selected_slide.split()[1]) - 1
-                img = Image.open(st.session_state.exported_images[s_idx])
-
-                prompt_json = build_prompt(
-                    f"Content from {selected_slide} (see slide image).",
-                    st.session_state.transcription_text,
-                    selected_slide,
-                    language_code=current_language()
-                )
-                debug_log(prompt_json)
-
-                # Create thinking config step by step for debugging
-                thinking_config = types.ThinkingConfig(includeThoughts=True)
-                content_config = types.GenerateContentConfig(thinking_config=thinking_config)
-                
-                reply = st.session_state.gemini_chat.send_message([img, prompt_json], config=content_config)
-
-                # Ensure proper Unicode handling for reply text
-                reply_text = reply.text
-                if isinstance(reply_text, bytes):
-                    reply_text = reply_text.decode('utf-8')
-
-                summary = create_summary_prompt(selected_slide)
-                st.session_state.messages.extend(
-                    [
-                        {"role": "user", "content": summary},
-                        {"role": "assistant", "content": reply_text},
-                    ]
-                )
-                st.session_state.learning_completed = True
-
-                # Log & persist ----------------------------------------
-                ll = get_learning_logger()
-                ll.log_interaction(
-                    interaction_type="slide_explanation",
-                    user_input=prompt_json,
-                    system_response=reply_text,
-                    metadata={
-                        "slide": selected_slide,
-                        "language_code": current_language(),
-                        "session_id": ll.session_manager.session_id,
-                    },
-                )
-                # Flush logs at learning completion milestone
-                ll.save_logs(force=True)
-                st.rerun()
-
             if not ready:
                 # Check what's missing and provide specific guidance
                 missing_items = []
@@ -1094,11 +1015,11 @@ elif st.session_state.current_page == "learning":
             st.write("")  # Minimal content
 
         # Row 3: Preview files section
-        col_main, col_spacer = st.columns([4, 1])
+        col_slide, col_controls = st.columns([3, 1])
         
-        with col_main:
+        with col_slide:
             st.markdown("---")
-            st.header("Preview Files")
+            st.header("Slide Preview")
             
             if st.session_state.exported_images and selected_slide:
                 idx = int(selected_slide.split()[1]) - 1
@@ -1130,25 +1051,117 @@ elif st.session_state.current_page == "learning":
                     import traceback
                     traceback.print_exc()  # Print to logs
                     st.stop()
-
-            # Video preview functionality
-            if "video_bytes" in st.session_state:
-                st.subheader("Lecture Recording")
-                try:
-                    # Display video from pre-loaded session state (no file I/O)
-                    st.video(st.session_state["video_bytes"])
-                    if DEV_MODE:
-                        st.caption(f"{config.course.course_title} - Full Lecture")
-                except Exception as e:
-                    if DEV_MODE:
-                        st.error(f"Error loading video: {e}")
-                    else:
-                        st.warning("Video content is temporarily unavailable.")
-            else:
-                st.info("Lecture recording will appear here when available")
+            elif st.session_state.exported_images:
+                st.info("Select a slide from the dropdown →")
         
-        with col_spacer:
-            st.write("")  # Minimal content
+        with col_controls:
+            st.markdown("---")
+            st.header("Controls")
+            
+            # Slide selector
+            if st.session_state.exported_images:
+                slides = [f"Slide {i+1}" for i in range(len(st.session_state.exported_images))]
+                
+                selected_slide = st.selectbox(
+                    "Select slide:",
+                    slides,
+                    key="selected_slide",
+                    help="Choose which slide to view and explain"
+                )
+                
+                # Show diagnostics in dev mode
+                if DEV_MODE:
+                    st.caption(f"Switches: {st.session_state.get('slide_switch_count', 0)}")
+                    
+                    # Show current slide filename
+                    if selected_slide:
+                        try:
+                            slide_idx = int(selected_slide.split()[1]) - 1
+                            if 0 <= slide_idx < len(st.session_state.exported_images):
+                                current_file = st.session_state.exported_images[slide_idx].name
+                                st.caption(f"File: {current_file}")
+                        except (ValueError, IndexError):
+                            st.caption("Error parsing selection")
+                
+                st.markdown("---")
+                
+                # Explain button
+                ready = (
+                    st.session_state.transcription_text
+                    and st.session_state.exported_images
+                    and st.session_state.profile_completed
+                )
+                
+                if ready and selected_slide:
+                    if st.button("Explain this slide", type="primary", use_container_width=True):
+                        s_idx = int(selected_slide.split()[1]) - 1
+                        img = Image.open(st.session_state.exported_images[s_idx])
+
+                        prompt_json = build_prompt(
+                            f"Content from {selected_slide} (see slide image).",
+                            st.session_state.transcription_text,
+                            selected_slide,
+                            language_code=current_language()
+                        )
+                        debug_log(prompt_json)
+
+                        # Create thinking config
+                        thinking_config = types.ThinkingConfig(includeThoughts=True)
+                        content_config = types.GenerateContentConfig(thinking_config=thinking_config)
+                        
+                        reply = st.session_state.gemini_chat.send_message([img, prompt_json], config=content_config)
+
+                        # Ensure proper Unicode handling
+                        reply_text = reply.text
+                        if isinstance(reply_text, bytes):
+                            reply_text = reply_text.decode('utf-8')
+
+                        summary = create_summary_prompt(selected_slide)
+                        st.session_state.messages.extend(
+                            [
+                                {"role": "user", "content": summary},
+                                {"role": "assistant", "content": reply_text},
+                            ]
+                        )
+                        st.session_state.learning_completed = True
+
+                        # Log & persist
+                        ll = get_learning_logger()
+                        ll.log_interaction(
+                            interaction_type="slide_explanation",
+                            user_input=prompt_json,
+                            system_response=reply_text,
+                            metadata={
+                                "slide": selected_slide,
+                                "language_code": current_language(),
+                                "session_id": ll.session_manager.session_id,
+                            },
+                        )
+                        ll.save_logs(force=True)
+                        st.rerun()
+                else:
+                    st.button("Explain this slide", disabled=True, use_container_width=True)
+                    if not ready:
+                        st.caption("Loading content...")
+            else:
+                st.info("Slides loading...")
+        
+        # Video section (full width below)
+        st.markdown("---")
+        if "video_bytes" in st.session_state:
+            st.subheader("Lecture Recording")
+            try:
+                # Display video from pre-loaded session state (no file I/O)
+                st.video(st.session_state["video_bytes"])
+                if DEV_MODE:
+                    st.caption(f"{config.course.course_title} - Full Lecture")
+            except Exception as e:
+                if DEV_MODE:
+                    st.error(f"Error loading video: {e}")
+                else:
+                    st.warning("Video content is temporarily unavailable.")
+        else:
+            st.info("Lecture recording will appear here when available")
 
         # Navigation buttons ---------------------------------------------
         st.markdown("---")
