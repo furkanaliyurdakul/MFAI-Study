@@ -957,15 +957,16 @@ elif st.session_state.current_page == "learning":
                 thinking_config = types.ThinkingConfig(includeThoughts=True)
                 content_config = types.GenerateContentConfig(thinking_config=thinking_config)
                 
-                reply = st.session_state.gemini_chat.send_message(
-                    payload,
-                    config=content_config
-                )
-                
-                # Ensure proper Unicode handling for reply text
-                reply_text = reply.text
-                if isinstance(reply_text, bytes):
-                    reply_text = reply_text.decode('utf-8')
+                with st.spinner("Generating response..."):
+                    reply = st.session_state.gemini_chat.send_message(
+                        payload,
+                        config=content_config
+                    )
+                    
+                    # Ensure proper Unicode handling for reply text
+                    reply_text = reply.text
+                    if isinstance(reply_text, bytes):
+                        reply_text = reply_text.decode('utf-8')
                 
                 st.session_state.messages.extend(
                     [
@@ -1114,12 +1115,13 @@ elif st.session_state.current_page == "learning":
                         thinking_config = types.ThinkingConfig(includeThoughts=True)
                         content_config = types.GenerateContentConfig(thinking_config=thinking_config)
                         
-                        reply = st.session_state.gemini_chat.send_message([img, prompt_json], config=content_config)
+                        with st.spinner(f"🤖 AI is analyzing {selected_slide}..."):
+                            reply = st.session_state.gemini_chat.send_message([img, prompt_json], config=content_config)
 
-                        # Ensure proper Unicode handling
-                        reply_text = reply.text
-                        if isinstance(reply_text, bytes):
-                            reply_text = reply_text.decode('utf-8')
+                            # Ensure proper Unicode handling
+                            reply_text = reply.text
+                            if isinstance(reply_text, bytes):
+                                reply_text = reply_text.decode('utf-8')
 
                         summary = create_summary_prompt(selected_slide)
                         st.session_state.messages.extend(
