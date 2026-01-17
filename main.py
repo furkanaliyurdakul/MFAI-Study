@@ -933,6 +933,13 @@ elif st.session_state.current_page == "learning":
                     st.session_state.slide_switch_count += 1
                     st.session_state.previous_slide = selected_slide
 
+        # Check if all resources are ready (used by chat and explain button)
+        ready = (
+            st.session_state.transcription_text
+            and st.session_state.exported_images
+            and st.session_state.profile_completed
+        )
+
         # Row 2: Chat messages, input, and explain button
         col_main, col_spacer = st.columns([4, 1])
         
@@ -1085,13 +1092,7 @@ elif st.session_state.current_page == "learning":
                 
                 st.markdown("---")
                 
-                # Explain button
-                ready = (
-                    st.session_state.transcription_text
-                    and st.session_state.exported_images
-                    and st.session_state.profile_completed
-                )
-                
+                # Explain button (ready variable defined earlier)
                 if ready and selected_slide:
                     if st.button("Explain this slide", type="primary", use_container_width=True):
                         s_idx = int(selected_slide.split()[1]) - 1
