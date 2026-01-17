@@ -113,11 +113,17 @@ def make_base_context(language_code: str = "en") -> dict:
 
     return base
 
-def create_summary_prompt(slide: str) -> str:
-    """Return the user‑facing summary prompt for logging."""
-    return (
-        f"Generate an explanation for {slide}. "
-    )
+def create_summary_prompt(slide: str, language_code: str = "en") -> str:
+    """Return the user‑facing summary prompt for logging in the target language."""
+    translations = {
+        "en": f"Generate an explanation for {slide}",
+        "de": f"Generiere eine Erklärung für {slide}",
+        "nl": f"Genereer een uitleg voor {slide}",
+        "tr": f"{slide} için bir açıklama oluştur",
+        "sq": f"Gjenero një shpjegim për {slide}",
+        "hi": f"{slide} के लिए एक स्पष्टीकरण उत्पन्न करें"
+    }
+    return translations.get(language_code, f"Generate an explanation for {slide}")
 
 """ potential bias
     if not personalised:
