@@ -1145,19 +1145,14 @@ elif st.session_state.current_page == "learning":
 
         # Navigation buttons ---------------------------------------------
         st.markdown("---")
-        col_p, col_n = st.columns(2)
-        with col_p:
-            if st.button("Previous: Student Profile"):
-                navigate_to("profile_survey")
-        with col_n:
-            if st.session_state.learning_completed:
-                if st.button("Next: Knowledge Test"):
-                    log_path = get_learning_logger().save_logs(force=True)
-                    st.session_state["learning_log_file"] = log_path
-                    navigate_to("knowledge_test")
-            else:
-                st.button("Next: Knowledge Test", disabled=True)
-                st.info("Generate at least one explanation before proceeding.")
+        if st.session_state.learning_completed:
+            if st.button("Proceed to Knowledge Test", type="primary", use_container_width=True):
+                log_path = get_learning_logger().save_logs(force=True)
+                st.session_state["learning_log_file"] = log_path
+                navigate_to("knowledge_test")
+        else:
+            st.button("Proceed to Knowledge Test", disabled=True, use_container_width=True)
+            st.info("Generate at least one explanation before proceeding.")
 
 # ------------------------------------------------------------------------
 # KNOWLEDGE TEST  – simple wrapper around *testui_knowledgetest*
@@ -1186,17 +1181,12 @@ elif st.session_state.current_page == "knowledge_test":
             st.session_state.test_completed = True
 
         st.markdown("---")
-        prev, nxt = st.columns(2)
-        with prev:
-            if st.button(f"Previous: {LABEL}"):
-                navigate_to("learning")
-        with nxt:
-            if st.session_state.test_completed:
-                if st.button("Next: User Experience Survey"):
-                    navigate_to("ueq_survey")
-            else:
-                st.button("Next: User Experience Survey", disabled=True)
-                st.info("Complete the Knowledge Test first.")
+        if st.session_state.test_completed:
+            if st.button("Proceed to User Experience Survey", type="primary", use_container_width=True):
+                navigate_to("ueq_survey")
+        else:
+            st.button("Proceed to User Experience Survey", disabled=True, use_container_width=True)
+            st.info("Complete the Knowledge Test first.")
 
 # ------------------------------------------------------------------------
 # UEQ SURVEY  – wrapper around *testui_ueqsurvey*
@@ -1225,22 +1215,10 @@ elif st.session_state.current_page == "ueq_survey":
         if st.button("Go to Knowledge Test"):
             navigate_to("knowledge_test")
     else:
-        # mark as completed once at least one answer present
-        if any(
-            resp.get("value") is not None
-            for resp in st.session_state.get("responses", {}).values()
-        ):
-            st.session_state.ueq_completed = True
-
-        st.markdown("---")
-        col_b, col_f = st.columns(2)
-        with col_b:
-            if st.button("Previous: Knowledge Test"):
-                navigate_to("knowledge_test")
-        with col_f:
-            if st.button("Finish"):
-                # Simple completion - just navigate to thank you page
-                navigate_to("completion")
+        # Check if UEQ was completed and navigate automatically
+        if st.session_state.get("ueq_submitted", False) and st.session_state.get("ueq_completed", False):
+            # UEQ completed via the Finish Interview button - navigate to completion
+            navigate_to("completion")
 
 # ------------------------------------------------------------------------
 # COMPLETION PAGE  – Thank you page with upload processing

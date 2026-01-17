@@ -187,77 +187,18 @@ for q in questions:
     # Add a subtle divider between questions
     st.markdown("<div class='question-divider'></div>", unsafe_allow_html=True)
 
-# Submit button
-if st.button("Submit Responses"):
-    # Require all 26 answers before submit
-    missing = [i for i in range(1, 26+1) if f"q{i}" not in st.session_state.responses or st.session_state.responses[f"q{i}"]["value"] is None]
-    if missing:
-        st.warning("Please answer all 26 UEQ items before submitting.")
-        st.stop()
-
-    # --- all items answered: continue as before ---------------------
-    st.success("Thank you for completing the User Experience Questionnaire!")
-
-    # Mark UEQ as submitted
-    st.session_state["ueq_submitted"] = True
-
-    answers_dict = {
-        key: entry["value"]  # 1‑7 scale value
-        for key, entry in st.session_state.responses.items()
-    }
-
-    response_text = "User Experience Questionnaire Responses:\n"
-    response_text += "=" * 50 + "\n\n"
-
-    for q in questions:
-        key = f"q{q['number']}"
-        value = st.session_state.responses[key]["value"]
-        response_text += f"{q['number']}. {q['left']} --- {q['right']}: {value}/7\n"
-
-    # Display the responses
-    st.text_area("Your Responses:", value=response_text, height=400)
-
-    # Import the session manager
-    from session_manager import get_session_manager
-
-    # Get or create a session manager instance
-    session_manager = get_session_manager()
-
-    bench = evaluate_ueq(answers_dict)
-    
-    # Save via session manager to JSON (not TXT)
-    payload = {
-        "answers": answers_dict,            # q1..q26 -> 1..7 (as selected)
-        "means": bench["means"],            # computed means per scale
-        "grades": bench["grades"],          # grade per scale
-    }
-    sm = get_session_manager()
-    sm.save_ueq(
-        answers=payload["answers"], 
-        benchmark={"means": payload["means"], "grades": payload["grades"]}, 
-        free_text=st.session_state.get("saved_comment")
-    )
-    st.success("UEQ saved.")
-
-    # Get the session info for display
-    session_info = session_manager.get_session_info()
-    fake_name = session_info.get("fake_name", "unknown")
-    session_id = session_info.get("session_id", "unknown")
-
-    st.success(f"Your responses have been saved with pseudonymized ID: {fake_name}")
-    st.caption(f"Session ID: {session_id}")
+st.markdown("---")
+st.markdown("### Final Step: Your Feedback")
 
 # Determine language condition from session_manager
 session_info = session_manager.get_session_info()
 lang_code = session_info.get("language_code") or st.session_state.get("language_code", "en")
 is_english_condition = (lang_code == "en")
 
-st.markdown("#### Your Feedback (highly appreciated)")
-
 if not is_english_condition:
     st.markdown(
         f"""
-**Please share your honest thoughts about learning in {language_name} with the AI assistant.**
+**Please share your honest thoughts about learning in {language_name} with the AI assistant** (optional but highly appreciated):
 
 **Key questions for our research:**
 - Compared to using AI tools in English (like ChatGPT/Gemini), did this feel **easier, harder, or about the same**? Why?
@@ -273,7 +214,7 @@ if not is_english_condition:
 else:
     st.markdown(
         """
-**Please share your honest thoughts about learning with the AI assistant.**
+**Please share your honest thoughts about learning with the AI assistant** (optional but highly appreciated):
 
 **Key questions for our research:**
 - If you've used AI tools before (ChatGPT, Gemini, etc.), how did this session compare? Easier, harder, or similar?
@@ -289,33 +230,63 @@ else:
 
 # --- comment widget -----------------------------------------
 comment_txt = st.text_area(
-    "Your feedback:",
+    "Your feedback (optional):",
     placeholder="Write your feedback here...",
     key="extra_comment",
-    height=150,
-    label_visibility="collapsed"
+    height=150
 )
 
-# --- save comment widget -----------------------------------
-if st.button("Save comment", key="save_extra_comment"):
-    comment = (comment_txt or "").strip()
-    if comment:
-        st.session_state["saved_comment"] = comment
-        st.success("Your comment has been saved!")
+st.markdown("---")
 
-        # If UEQ already submitted, re-save JSON with comment included
-        if st.session_state.get("ueq_submitted", False):
-            answers_dict = {
-                key: entry["value"]
-                for key, entry in st.session_state.responses.items()
-                if entry["value"] is not None
-            }
-            bench = evaluate_ueq(answers_dict)
-            session_manager.save_ueq(
-                answers=answers_dict,
-                benchmark=bench,
-                free_text=comment,
-            )
-            st.success("Your comment has been added to your UEQ responses.")
-    else:
-        st.warning("Please enter a comment before saving.")
+# --- Single Finish Interview Button -----------------------------------
+if st.button("✅ Finish Interview", type="primary", use_container_width=True):
+    # Validate all 26 questions are answered
+    missing = [i for i in range(1, 27) if f"q{i}" not in st.session_state.responses or st.session_state.responses[f"q{i}"]["value"] is None]
+    
+    if missing:
+        st.error(f"⚠️ Please answer all 26 questions before finishing. Missing: {len(missing)} question(s)")
+        st.warning(f"Unanswered questions: {', '.join([f'Q{i}' for i in missing[:5]])}{'...' if len(missing) > 5 else ''}")
+        st.stop()
+    
+    # Get comment (if any)
+    comment = (comment_txt or "").strip()
+    
+    # Collect all answers
+    answers_dict = {
+        key: entry["value"]
+        for key, entry in st.session_state.responses.items()
+    }
+    
+    # Calculate UEQ scores
+    bench = evaluate_ueq(answers_dict)
+    
+    # Save everything to JSON file
+    sm = get_session_manager()
+    file_path = sm.save_ueq(
+        answers=answers_dict,
+        benchmark={"means": bench["means"], "grades": bench["grades"]},
+        free_text=comment if comment else None
+    )
+    
+    # Mark as submitted and completed
+    st.session_state["ueq_submitted"] = True
+    st.session_state["ueq_completed"] = True
+    
+    # Get session info for confirmation
+    session_info = sm.get_session_info()
+    fake_name = session_info.get("fake_name", "unknown")
+    
+    # Show success message
+    st.success(f"✅ Thank you! Your responses have been saved successfully!")
+    if comment:
+        st.success("💬 Your feedback has been included.")
+    st.caption(f"Pseudonymized ID: {fake_name}")
+    
+    # Brief pause for user to see confirmation
+    import time
+    time.sleep(1.5)
+    
+    # Navigate to completion page
+    st.rerun()
+
+st.caption("After clicking 'Finish Interview', your responses will be saved and you'll proceed to the completion page.")
