@@ -81,12 +81,23 @@ st.markdown(
     f"""
 This questionnaire evaluates **your experience with the AI learning assistant in {language_name}** (the chat interface and AI responses you just used).
 
-**What to focus on when answering:**
-- Your typical experience with AI tools (often in English)
-- How you normally learn new technical material
-- What felt different or similar about learning in {language_name}
+{"**Important - How to answer these questions:**" if session_info_global.get("language_code", "en") != "en" else "**How to answer these questions:**"}
 
-This comparison is valuable for our research on language effects in AI-assisted learning.
+{f'''You just used the AI assistant in **{language_name}**. When answering each question, please **compare** this experience to what you imagine your experience would be like if you had used the AI in **English** instead.
+
+**Think comparatively:**
+- Would this experience be better or worse if the AI responded in English?
+- Would you feel more or less comfortable/confident using English?
+- Compare your {language_name} experience against your expectation of an English experience
+
+Your comparison helps us understand whether AI quality differs across languages. There are no right or wrong answers - we need your honest impression of this language comparison.''' if session_info_global.get("language_code", "en") != "en" else f'''You used the AI assistant in **{language_name}** (your native language). When answering each question, please rate your **actual experience** with this AI learning tool.
+
+**Focus on:**
+- How the AI assistant helped (or didn't help) your learning
+- The quality and usefulness of AI explanations
+- Your overall satisfaction with the learning experience
+
+You're rating your actual experience - there are no comparisons needed since you're in the control group.'''}
 
 For each item, select the point on the scale that best represents your impression. The scale goes from **negative attributes on the left** to **positive attributes on the right**.
 
