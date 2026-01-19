@@ -36,3 +36,6 @@ output/
 #uploads/profile/
 # Temporary files
 *.tmp
+
+# Commit history exports
+commits_*.txt
