@@ -997,11 +997,11 @@ elif st.session_state.current_page == "learning":
                         st.info("Complete the Student Profile Survey first to enable explanation generation.")
                     else:
                         if DEV_MODE:
-                            st.info(f"⏳ Loading course content... Missing: {', '.join(missing_items)}")
+                            st.info(f"Loading course content... Missing: {', '.join(missing_items)}")
                         else:
-                            st.info("⏳ Loading course content...")
+                            st.info("Loading course content...")
                 else:
-                    st.info("⏳ Preparing explanation generator...")
+                    st.info("Preparing explanation generator...")
         
         with col_spacer:
             st.write("")  # Minimal content
@@ -1115,7 +1115,7 @@ elif st.session_state.current_page == "learning":
                         thinking_config = types.ThinkingConfig(includeThoughts=True)
                         content_config = types.GenerateContentConfig(thinking_config=thinking_config)
                         
-                        with st.spinner(f"🤖 AI is analyzing {selected_slide}..."):
+                        with st.spinner(f"LLM is analyzing {selected_slide}..."):
                             reply = st.session_state.gemini_chat.send_message([img, prompt_json], config=content_config)
 
                             # Ensure proper Unicode handling
@@ -1123,7 +1123,7 @@ elif st.session_state.current_page == "learning":
                             if isinstance(reply_text, bytes):
                                 reply_text = reply_text.decode('utf-8')
 
-                        summary = create_summary_prompt(selected_slide)
+                        summary = create_summary_prompt(selected_slide, language_code=current_language())
                         st.session_state.messages.extend(
                             [
                                 {"role": "user", "content": summary},

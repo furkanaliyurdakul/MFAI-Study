@@ -84,6 +84,14 @@ class LearningLogger:
         if not self.log_entries and not force:
             return None
 
+        # Always save interaction analytics when force=True (even if log_entries is empty)
+        # This ensures interaction_counts are captured for research analytics
+        if force:
+            analytics_path = self.session_manager.save_interaction_analytics(self.interaction_counts)
+            if not self.log_entries:
+                # No log entries to save, but analytics have been saved
+                return None
+
         # Create a log data structure with session information
         session_info = self.session_manager.get_session_info()
         log_data = {
@@ -98,8 +106,9 @@ class LearningLogger:
         # Save the logs using the session manager
         file_path = self.session_manager.save_learning_log(log_data)
 
-        # Also save interaction analytics
-        analytics_path = self.session_manager.save_interaction_analytics(self.interaction_counts)
+        # Also save interaction analytics (if not already saved above)
+        if not force:
+            analytics_path = self.session_manager.save_interaction_analytics(self.interaction_counts)
 
         # Clear the log entries after saving to prevent duplicate entries
         self.log_entries.clear()

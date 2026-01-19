@@ -550,7 +550,7 @@ class SessionManager:
                 knowledge_data = final_analytics["knowledge_test_results"]
                 if "answers" in knowledge_data:
                     total_questions = len(knowledge_data["answers"])
-                    correct_answers = sum(1 for ans in knowledge_data["answers"].values() if ans.get("is_correct", False))
+                    correct_answers = sum(1 for ans in knowledge_data["answers"].values() if ans.get("correct", False))
                     final_analytics["summary_metrics"]["knowledge_test_summary"] = {
                         "total_questions": total_questions,
                         "correct_answers": correct_answers,

@@ -142,7 +142,7 @@ def show_logout_interface() -> None:
         # Dev mode sidebar info
         if st.session_state.get("dev_mode", False) or getattr(config, "dev_mode", False):
             with st.sidebar:
-                st.caption("DEV — session info")
+                st.caption("DEV - session info")
                 st.json({
                     "session_id": st.session_state.get("session_id"),
                     "language": st.session_state.get("language_code"),
