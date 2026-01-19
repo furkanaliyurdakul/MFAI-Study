@@ -132,31 +132,33 @@ class AnalyticsSyncer:
             
             # Insert detailed results
             answers = results.get("answers", {})
+            # Extract answer data from {"user": answer, "correct": bool} structure
+            # Current test has 5 single-choice questions (q1-q5)
             self.supabase.table("knowledge_test_results").insert({
                 "session_id": session_id,
-                "q1_correct": answers.get("knowledge_q1") == results.get("correct_answers", {}).get("knowledge_q1"),
-                "q1_answer": answers.get("knowledge_q1"),
-                "q2_correct": answers.get("knowledge_q2") == results.get("correct_answers", {}).get("knowledge_q2"),
-                "q2_answer": answers.get("knowledge_q2"),
-                "q3_correct": answers.get("knowledge_q3") == results.get("correct_answers", {}).get("knowledge_q3"),
-                "q3_answer": answers.get("knowledge_q3"),
-                "q4_correct": answers.get("knowledge_q4") == results.get("correct_answers", {}).get("knowledge_q4"),
-                "q4_answer": answers.get("knowledge_q4"),
-                "q5_score": results.get("q5_score", 0),
-                "q5_answer_a": answers.get("knowledge_q5_a", False),
-                "q5_answer_b": answers.get("knowledge_q5_b", False),
-                "q5_answer_c": answers.get("knowledge_q5_c", False),
-                "q5_answer_d": answers.get("knowledge_q5_d", False),
-                "q6_correct": answers.get("knowledge_q6") == results.get("correct_answers", {}).get("knowledge_q6"),
-                "q6_answer": answers.get("knowledge_q6"),
-                "q7_correct": answers.get("knowledge_q7") == results.get("correct_answers", {}).get("knowledge_q7"),
-                "q7_answer": answers.get("knowledge_q7"),
-                "q8_correct": answers.get("knowledge_q8") == results.get("correct_answers", {}).get("knowledge_q8"),
-                "q8_answer": answers.get("knowledge_q8"),
-                "total_score": results.get("score"),
-                "max_score": results.get("max_score", 8.0),
-                "percentage": results.get("percentage"),
-                "grade": results.get("grade"),
+                "q1_correct": answers.get("q1", {}).get("correct", False),
+                "q1_answer": answers.get("q1", {}).get("user"),
+                "q2_correct": answers.get("q2", {}).get("correct", False),
+                "q2_answer": answers.get("q2", {}).get("user"),
+                "q3_correct": answers.get("q3", {}).get("correct", False),
+                "q3_answer": answers.get("q3", {}).get("user"),
+                "q4_correct": answers.get("q4", {}).get("correct", False),
+                "q4_answer": answers.get("q4", {}).get("user"),
+                "q5_score": 1.0 if answers.get("q5", {}).get("correct", False) else 0.0,
+                "q5_answer_a": False,  # Q5 is single-choice in current version
+                "q5_answer_b": False,
+                "q5_answer_c": False,
+                "q5_answer_d": False,
+                "q6_correct": None,  # q6-q8 not implemented in current test
+                "q6_answer": None,
+                "q7_correct": None,
+                "q7_answer": None,
+                "q8_correct": None,
+                "q8_answer": None,
+                "total_score": results.get("score_total"),
+                "max_score": results.get("max_score", 5.0),
+                "percentage": (results.get("score_total", 0) / results.get("max_score", 5.0)) * 100 if results.get("max_score", 5.0) > 0 else 0,
+                "grade": "pass" if (results.get("score_total", 0) / results.get("max_score", 5.0)) >= 0.6 else "fail",
                 "submitted_at": datetime.now(timezone.utc).isoformat()
             }).execute()
             
