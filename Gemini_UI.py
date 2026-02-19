@@ -113,7 +113,7 @@ def make_base_context(language_code: str = "en") -> dict:
 
     return base
 
-def create_summary_prompt(slide: str) -> str:
+def create_summary_prompt(slide: str, language_code: str = "en") -> str:
     """Return the user‑facing summary prompt for logging."""
     return (
         f"Generate an explanation for {slide}. "

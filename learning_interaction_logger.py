@@ -132,17 +132,17 @@ class LearningLogger:
         }
 
 
-# Create a singleton instance
-learning_logger = None
+# Per-session instance via st.session_state (NOT a global singleton)
+# This ensures each concurrent Streamlit user gets their own logger.
 
 
 def get_learning_logger():
-    """Get or create the learning logger instance.
+    """Get or create the learning logger instance, isolated per Streamlit session.
 
     Returns:
-        LearningLogger: The learning logger instance
+        LearningLogger: The learning logger instance for the current user
     """
-    global learning_logger
-    if learning_logger is None:
-        learning_logger = LearningLogger()
-    return learning_logger
+    import streamlit as st
+    if "learning_logger" not in st.session_state:
+        st.session_state["learning_logger"] = LearningLogger()
+    return st.session_state["learning_logger"]

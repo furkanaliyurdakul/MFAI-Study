@@ -116,6 +116,7 @@ atexit.register(lambda: page_dump(Path(sm.session_dir)))
 # ── std‑lib ────────────────────────────────────────────
 import os
 import sys
+import time
 import psutil
 from pathlib import Path
 from typing import Dict, List
@@ -329,9 +330,6 @@ if current_page != previous_page:
     st.session_state["previous_page"] = current_page
     if DEBUG_MODE:
         print(f"🔧 DEBUG: Page changed from '{previous_page}' to '{current_page}' - scrolling to top")
-
-# Yiman = AIzaSyCdNS08cjO_lvj35Ytvs8szbUmeAdo4aIA
-# Furkan Ali = AIzaSyArkmZSrZaeWQSfL9CFkQ0jXaEe4D9sMEQ
 
 # ───────────────────────────────────────────────────────────────
 # Helper functions
@@ -719,13 +717,20 @@ elif st.session_state.current_page == "learning":
         if "gemini_chat" not in st.session_state:
             if DEBUG_MODE:
                 print("🔧 DEBUG: Creating new Gemini chat session")
-            st.session_state.gemini_chat = client.chats.create(
-                model=config.model.learning_model,
-                history=[]
-            )
-            st.session_state.gemini_chat_initialized = False
-            if DEBUG_MODE:
-                print("🔧 DEBUG: Gemini chat session created")
+            try:
+                st.session_state.gemini_chat = client.chats.create(
+                    model=config.model.learning_model,
+                    history=[]
+                )
+                st.session_state.gemini_chat_initialized = False
+                if DEBUG_MODE:
+                    print("🔧 DEBUG: Gemini chat session created")
+            except Exception as e:
+                st.error(f"❌ Failed to create chat session: {type(e).__name__}")
+                st.info("Please try refreshing the page. If the issue persists, contact the research team.")
+                if DEBUG_MODE:
+                    st.exception(e)
+                st.stop()
 
         # Send base context only once per session  
         if not st.session_state.get("gemini_chat_initialized", False):
@@ -736,12 +741,42 @@ elif st.session_state.current_page == "learning":
                 language_code=current_language()
             )
             if DEBUG_MODE:
-                print("🔧 DEBUG: Base context created, sending to Gemini...")
+                print(f"🔧 DEBUG: Base context created (size: {len(json.dumps(base_ctx))} chars)")
 
-            st.session_state.gemini_chat.send_message(json.dumps(base_ctx))
-            st.session_state.gemini_chat_initialized = True
-            if DEBUG_MODE:
-                print("🔧 DEBUG: Base context sent successfully")
+            # Retry logic for ServerError
+            max_retries = 3
+            retry_count = 0
+            success = False
+            
+            while retry_count < max_retries and not success:
+                try:
+                    st.session_state.gemini_chat.send_message(json.dumps(base_ctx))
+                    st.session_state.gemini_chat_initialized = True
+                    success = True
+                    if DEBUG_MODE:
+                        print("🔧 DEBUG: Base context sent successfully")
+                except Exception as e:
+                    retry_count += 1
+                    if DEBUG_MODE:
+                        print(f"🔧 DEBUG: Attempt {retry_count} failed: {type(e).__name__}")
+                    
+                    if retry_count >= max_retries:
+                        st.error("❌ Unable to initialize AI assistant. This may be due to:")
+                        st.markdown("""
+                        - Temporary API service issues
+                        - Network connectivity problems
+                        - API rate limits
+                        
+                        **Please try:**
+                        1. Refresh the page
+                        2. Wait 1-2 minutes and try again
+                        3. Contact the research team if the problem persists
+                        """)
+                        if DEBUG_MODE:
+                            st.exception(e)
+                        st.stop()
+                    else:
+                        time.sleep(2)  # Wait 2 seconds before retry
 
             get_learning_logger().log_interaction(
                 interaction_type="prime_context",
@@ -957,16 +992,32 @@ elif st.session_state.current_page == "learning":
                 thinking_config = types.ThinkingConfig(includeThoughts=True)
                 content_config = types.GenerateContentConfig(thinking_config=thinking_config)
                 
+                # Retry logic for API errors
+                max_retries = 3
+                retry_count = 0
+                reply_text = None
+                
                 with st.spinner("Generating response..."):
-                    reply = st.session_state.gemini_chat.send_message(
-                        payload,
-                        config=content_config
-                    )
-                    
-                    # Ensure proper Unicode handling for reply text
-                    reply_text = reply.text
-                    if isinstance(reply_text, bytes):
-                        reply_text = reply_text.decode('utf-8')
+                    while retry_count < max_retries and reply_text is None:
+                        try:
+                            reply = st.session_state.gemini_chat.send_message(
+                                payload,
+                                config=content_config
+                            )
+                            
+                            # Ensure proper Unicode handling for reply text
+                            reply_text = reply.text
+                            if isinstance(reply_text, bytes):
+                                reply_text = reply_text.decode('utf-8')
+                        except Exception as e:
+                            retry_count += 1
+                            if retry_count >= max_retries:
+                                st.error("❌ Failed to get AI response. Please try again or contact the research team.")
+                                if DEBUG_MODE:
+                                    st.exception(e)
+                                st.stop()
+                            else:
+                                time.sleep(2)  # Wait before retry
                 
                 st.session_state.messages.extend(
                     [
@@ -1115,13 +1166,29 @@ elif st.session_state.current_page == "learning":
                         thinking_config = types.ThinkingConfig(includeThoughts=True)
                         content_config = types.GenerateContentConfig(thinking_config=thinking_config)
                         
+                        # Retry logic for API errors
+                        max_retries = 3
+                        retry_count = 0
+                        reply_text = None
+                        
                         with st.spinner(f"LLM is analyzing {selected_slide}..."):
-                            reply = st.session_state.gemini_chat.send_message([img, prompt_json], config=content_config)
+                            while retry_count < max_retries and reply_text is None:
+                                try:
+                                    reply = st.session_state.gemini_chat.send_message([img, prompt_json], config=content_config)
 
-                            # Ensure proper Unicode handling
-                            reply_text = reply.text
-                            if isinstance(reply_text, bytes):
-                                reply_text = reply_text.decode('utf-8')
+                                    # Ensure proper Unicode handling
+                                    reply_text = reply.text
+                                    if isinstance(reply_text, bytes):
+                                        reply_text = reply_text.decode('utf-8')
+                                except Exception as e:
+                                    retry_count += 1
+                                    if retry_count >= max_retries:
+                                        st.error(f"❌ Failed to generate explanation for {selected_slide}. Please try again.")
+                                        if DEBUG_MODE:
+                                            st.exception(e)
+                                        st.stop()
+                                    else:
+                                        time.sleep(2)  # Wait before retry
 
                         summary = create_summary_prompt(selected_slide, language_code=current_language())
                         st.session_state.messages.extend(
