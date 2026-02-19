@@ -97,11 +97,11 @@ if not st.session_state.show_review:
 
     # Q1 - Native language (pre-filled from credentials)
     st.text_input(
-        "Q1. What is your native language?",
+        "Q1. What is your native language (assigned study language)?",
         value=LANGUAGE_NAMES.get(get_current_language(), "English"),
         disabled=True,
         key="native_language_display",
-        help="Your assigned study language was set during enrollment and determines your experimental condition. This cannot be changed as we are researching how different languages affect learning with AI assistants. If you believe this is incorrect, please inform the research team."
+        help="This is the language assigned to you for this study, based on your enrollment. It determines your experimental condition. If this does not match your native language, please inform the research team."
     )
 
     # Q2 - English proficiency (only show if study language is NOT English to avoid duplicate)

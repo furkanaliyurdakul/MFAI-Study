@@ -32,9 +32,9 @@ def show_login_page() -> bool:
     with col2:
         st.header("Secure Access")
         st.markdown("""
-        Welcome to the platform.
+        Welcome to the AI Learning Research Platform.
         
-        Please enter your credentials to access the system.
+        Please enter your assigned credentials to begin.
         """)
         
         # Login form
@@ -123,7 +123,7 @@ def show_login_page() -> bool:
         """
         <div style='text-align: center; color: #666;'>
         <small>
-        Learning Platform | 2025
+        Learning Platform | 2026
         </small>
         </div>
         """,

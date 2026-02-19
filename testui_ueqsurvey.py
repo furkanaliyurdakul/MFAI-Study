@@ -97,7 +97,7 @@ Your comparison helps us understand whether AI quality differs across languages.
 - The quality and usefulness of AI explanations
 - Your overall satisfaction with the learning experience
 
-You're rating your actual experience - there are no comparisons needed since you're in the control group.'''}
+You're rating your actual experience - there are no comparisons needed.'''}
 
 For each item, select the point on the scale that best represents your impression. The scale goes from **negative attributes on the left** to **positive attributes on the right**.
 

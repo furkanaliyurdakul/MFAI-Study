@@ -471,7 +471,7 @@ if DEV_MODE:
         st.rerun()
 else:
     # For participants, show fixed language
-    st.sidebar.info(f"**Language:** {credential_config.language_code.upper()}")
+    st.sidebar.info(f"**Language:** {language_names.get(credential_config.language_code, credential_config.language_code.upper())}")
 
 if st.sidebar.button("Logout", type="secondary"):
     from authentication import get_auth_manager
@@ -500,7 +500,7 @@ if st.session_state.current_page == "home":
 
 **Your Study Language: {language_names.get(current_language(), 'English')}**
 
-You are taking part in our KU Leuven study on **language effects in AI-assisted learning**.
+You are taking part in our FH Dortmund study on **language effects in AI-assisted learning**.
 We are investigating whether the language used when learning with AI assistants affects how well students understand the material.
 
 In today's session, you will learn about **{TOPIC}** using an AI assistant in **{language_names.get(current_language(), 'English')}**.
@@ -509,23 +509,22 @@ In today's session, you will learn about **{TOPIC}** using an AI assistant in **
 This ensures valid comparison across study participants.
 
 ---
-#### What will happen? – step by step  
+#### What will happen? - step by step  
 | Step | What you do | Time | What you provide |
 |------|-------------|------|------------------|
-| 1 | Read & sign the digital consent form | ≈ 5 min | e‑signature |
-| 2 | **Student Profile Survey** | ≈ 10 min | demographics, language skills, AI knowledge |
-| 3 | **{LABEL}** using LLM | ≈ 25 min | interact with AI assistant |
-| 4 | **Knowledge Test** | ≈ 10 min | answers to 8 quiz items |
-| 5 | **User‑Experience Questionnaire** | ≈ 10 min | 26 quick ratings |
-| 6 | Short feedback | ≈ 10 min | feedback |
+| 1 | Read the consent form & tick the checkbox | ≈ 5 min | consent |
+| 2 | **Student Profile Survey** | ≈ 10 min | demographics, language skills, AI knowledge |
+| 3 | **{LABEL}** using LLM | ≈ 25 min | interact with AI assistant |
+| 4 | **Knowledge Test** | ≈ 10 min | answers to 5 quiz items |
+| 5 | **User Experience Questionnaire & Feedback*** | ≈ 15 min | 26 quick ratings + written feedback |
 
-*Total time*: **~ 70 minutes**
+*Total time*: **~ 65 minutes**
 
 ---
 #### Your role  
 * Work through the steps **in the order shown** (use the sidebar).  
-* Give honest answers – there are no right or wrong responses.  
-* **Ask questions any time** – just speak to the facilitator.
+* Give honest answers - there are no right or wrong responses.  
+* **Ask questions any time** - just speak to the facilitator.
 
 ---
 #### Why we record your data  
@@ -1345,11 +1344,11 @@ elif st.session_state.current_page == "completion":
     st.markdown("""
     ### Next Steps
     
-    Your participation is complete! Thank you for your time and dedication to this research.
+    Please inform the facilitator that you have completed the session. They will guide you through a short closing conversation (approximately 5 minutes, optional).
     
-    If you have any questions about the study or would like to receive information about the results, please contact the research team. Your contribution helps us understand how language affects AI-assisted learning.
+    If you have any questions about the study or would like to receive information about the results, please contact the research team.
     
-    Thank you for helping advance educational equity in AI-powered learning!
+    Thank you for your time and participation!
     """)
     
     st.markdown("---")
@@ -1442,16 +1441,6 @@ elif st.session_state.current_page == "completion":
         if DEV_MODE:
             session_info = sm.get_session_info()
             st.info(f"Session ID: `{session_info['session_id']}`")
-    
-    st.markdown("---")
-    
-    st.markdown("""
-    ### Next Steps
-    
-    Please inform the facilitator that you have completed the session. They will guide you through the final brief interview (approximately 5 minutes).
-    
-    Thank you for your time and participation!
-    """)
     
     st.markdown("---")
     

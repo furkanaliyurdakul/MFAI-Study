@@ -64,7 +64,7 @@ class PlatformConfig:
     # Study information
     study_title: str = "Language Effects on LLM-Assisted Learning Study"
     study_organization: str = "FH Dortmund"
-    study_year: str = "2025"
+    study_year: str = "2026"
     
     # Interface labels
     learning_section_name: str = "Learning Experience"  # Used in navigation
@@ -78,7 +78,7 @@ class PlatformConfig:
             self.session_components = [
                 "Student Profile Survey",
                 self.learning_section_name,
-                "Knowledge Assessment", 
+                "Knowledge Test", 
                 "User Experience Questionnaire"
             ]
 
@@ -92,7 +92,7 @@ class UITextConfig:
     welcome_subtitle: str = "Welcome – what this session is about"
     
     study_description: str = (
-        "You are taking part in our {study_organization} study on **fairness in AI-assisted learning**. "
+        "You are taking part in our {study_organization} study on **language effects in AI-assisted learning**. "
         "We are investigating how the language of instruction affects learning outcomes when using "
         "large language models (LLMs) as study assistants. This research examines whether language "
         "choice creates educational inequalities in AI-supported learning environments."
@@ -122,7 +122,7 @@ class UITextConfig:
     # Study steps and instructions
     steps_table_header: str = "What will happen? – step by step"
     start_instruction: str = 'When you are ready, click **"Start the Student Profile Survey"** below.'
-    completion_thanks: str = "Thank you for helping us improve adaptive learning experiences!"
+    completion_thanks: str = "Thank you for helping us understand language effects in AI-assisted learning!"
     
     # Study role and data info
     your_role_text: str = (
