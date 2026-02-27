@@ -213,10 +213,13 @@ if not is_english_condition:
         f"""
 **Please answer these two questions about your experience learning in {language_name}:**
 
-**1. Language Comparison (most important):**  
+**- Language and Learning (most important):**  
+How do you feel about learning with an AI assistant that responds in {language_name}? Do you think it helped or hindered your learning experience? Please explain why, be specific about what aspects of the AI's responses affected your learning (e.g., clarity, helpfulness, confidence, speed, question quality).
+
+**- Language Comparison:**  
 If you had learned this material using AI in **English** instead of {language_name}, would your learning experience have been **better, worse, or about the same**? Please explain why, be specific about what would change (e.g., understanding, confidence, speed, question quality, AI response quality).
 
-**2. What affected your experience?**  
+**- What affected your experience?**  
 Mention anything that stood out, good or bad, about using AI in {language_name}. Examples: translation issues, unnatural phrasing, mixed languages, clarity problems, surprising quality, preference for English/native language, technical issues, etc.
 """
     )
@@ -225,10 +228,13 @@ else:
         """
 **Please answer these two questions about your experience learning in English:**
 
-**1. Language and Learning (most important):**  
+**- Language and Learning (most important):**  
+How do you feel about learning with an AI assistant that responds in English? Do you think it helped or hindered your learning experience? Please explain why, be specific about what aspects of the AI's responses affected your learning (e.g., clarity, helpfulness, confidence, speed, question quality).
+
+**- Language Comparison (only if applicable):**  
 Do you think your learning experience would have been **different** if the AI had responded in a **non-native language** you speak? Would it have been better, worse, or similar? Why? (If you only speak English, imagine learning in a language you studied at school.)
 
-**2. What affected your experience?**  
+**- What affected your experience?**  
 Mention anything that stood out, good or bad, about using the AI assistant. Examples: explanation clarity, confusing terminology, accuracy concerns, response quality, technical issues, comparison to other AI tools you've used, etc.
 """
     )

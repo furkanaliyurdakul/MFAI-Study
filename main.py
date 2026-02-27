@@ -1427,12 +1427,12 @@ elif st.session_state.current_page == "completion":
                     if DEV_MODE:
                         st.info(f"Session ID: `{session_id}`")
                 else:
-                    st.info("✅ Your responses have been saved locally.")
                     if DEV_MODE:
+                        st.info("✅ Your responses have been saved locally.")
                         st.warning("⚠️ Cloud backup experienced some issues, but your data is secure.")
                 
             except Exception as e:
-                st.info("✅ Your responses have been saved locally.")
+                #st.info("✅ Your responses have been saved locally.")
                 if DEV_MODE:
                     st.warning(f"⚠️ Upload processing had issues: {str(e)}")
     else:
@@ -1443,26 +1443,7 @@ elif st.session_state.current_page == "completion":
             st.info(f"Session ID: `{session_info['session_id']}`")
     
     st.markdown("---")
-    
-    # Action buttons
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        st.markdown("### What would you like to do?")
-        
-        if st.button("🔄 Start New Interview Session", use_container_width=True):
-            # Reset all session state for new interview
-            for key in ["profile_completed", "learning_completed", "test_completed", "ueq_completed", 
-                       "completion_processed", "upload_completed", "responses", "messages", 
-                       "exported_images", "transcription_text"]:
-                if key in st.session_state:
-                    del st.session_state[key]
-            
-            # Navigate to home
-            navigate_to("home")
-        
-        if st.button("Return to Home Page", use_container_width=True):
-            navigate_to("home")
+    st.info("You may now close this page. Thank you for your participation!")
 
 # ------------------------------------------------------------------------
 # PILOT SMOKE TEST (DEV MODE ONLY)
