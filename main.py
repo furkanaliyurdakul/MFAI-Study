@@ -132,7 +132,7 @@ from google.genai import types
 # ── local ──────────────────────────────────────────────────────
 # NEW – Consent and information document -------------------------
 DOCS_DIR = Path(__file__).parent / "docs"
-CONSENT_PDF = DOCS_DIR / "Participant_Information_and_Consent.pdf"
+CONSENT_PDF = DOCS_DIR / "Participant_Information_and_Consent_V2.pdf"
 
 # ── Media files loaded once into session state ──────────────────────
 # Images and video loaded at startup to prevent memory leaks from repeated loading
