@@ -1,8 +1,9 @@
 [server]
 # Increase max upload size for video/audio files
 maxUploadSize = 200
-# Enable file watcher for hot reloading in development
-fileWatcherType = "auto"
+# Disable file watcher to avoid inotify watch limit on Streamlit Cloud (Linux)
+# "auto" selects inotify which crashes with OSError: [Errno 28] on limited environments
+fileWatcherType = "none"
 # Disable CORS for deployment
 enableCORS = false
 # Enable xsrf protection

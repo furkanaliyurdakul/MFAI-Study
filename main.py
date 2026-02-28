@@ -294,22 +294,43 @@ if not st.session_state.get("course_content_loaded", False):
         print(f"📚 Course content loaded: {len(st.session_state.get('exported_images', []))} slides")
 
 # ── Inject JavaScript Heartbeat ────────────────────────────────
-# This runs on every page load and keeps session active in Supabase
-# ONLY inject heartbeat if session was successfully registered
+# This runs on every page load and keeps session active in Supabase.
+# ONLY inject heartbeat if session was successfully registered.
+#
+# IMPORTANT: components.html() creates an iframe that is destroyed on every
+# Streamlit rerun. We MUST re-inject on each rerun to keep the JS heartbeat
+# alive, but unconditional injection can trigger infinite rerun storms
+# (components.html → iframe render → Streamlit detects change → rerun → repeat).
+#
+# Solution: time-based throttle. Always inject on page changes and after
+# natural user-interaction gaps (≥2s). Skip during rapid rerun storms (<2s gap,
+# same page). The JS heartbeat pings every 20s; Supabase marks offline after 60s,
+# so brief gaps during storms are harmless.
 if presence and credential_config and "language_code" in st.session_state and st.session_state.get("session_registered", False):
     session_info = sm.get_session_info()
     current_page = st.session_state.get("current_page", "home")
-    # Only log heartbeat on first rerun of each page
-    heartbeat_key = f"_heartbeat_logged_{current_page}"
-    if not st.session_state.get(heartbeat_key, False):
-        print(f"📡 Heartbeat active for session {session_info['session_id']}, page {current_page}")
-        st.session_state[heartbeat_key] = True
-    presence.inject_heartbeat(
-        session_id=session_info["session_id"],
-        user_id=credential_config.username,
-        language_code=st.session_state["language_code"],
-        current_page=current_page
-    )
+
+    _hb_now = time.monotonic()
+    _hb_last_time = st.session_state.get("_hb_inject_time", 0.0)
+    _hb_last_page = st.session_state.get("_hb_inject_page", None)
+    _hb_gap = _hb_now - _hb_last_time
+
+    # Inject when: (a) page changed, OR (b) ≥2 seconds since last injection
+    # This ensures heartbeat survives normal usage (user takes ≥2s between actions)
+    # while breaking rerun storms (many reruns within milliseconds on same page).
+    _hb_should_inject = (_hb_last_page != current_page) or (_hb_gap >= 2.0)
+
+    if _hb_should_inject:
+        if _hb_last_page != current_page:
+            print(f"📡 Heartbeat active for session {session_info['session_id']}, page {current_page}")
+        st.session_state["_hb_inject_time"] = _hb_now
+        st.session_state["_hb_inject_page"] = current_page
+        presence.inject_heartbeat(
+            session_id=session_info["session_id"],
+            user_id=credential_config.username,
+            language_code=st.session_state["language_code"],
+            current_page=current_page
+        )
 
 # ── Scroll to Top on Page Navigation ──────────────────────────
 # Only scroll when user actually navigates to a different page, not on every rerun
