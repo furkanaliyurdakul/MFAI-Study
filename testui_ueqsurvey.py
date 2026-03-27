@@ -280,13 +280,22 @@ if st.button("✅ Finish Interview", type="primary", use_container_width=True):
     # Calculate UEQ scores
     bench = evaluate_ueq(answers_dict)
     
-    # Save everything to JSON file
+    # Save everything to JSON file with error handling
     sm = get_session_manager()
-    file_path = sm.save_ueq(
-        answers=answers_dict,
-        benchmark={"means": bench["means"], "grades": bench["grades"]},
-        free_text=comment
-    )
+    try:
+        file_path = sm.save_ueq(
+            answers=answers_dict,
+            benchmark={"means": bench["means"], "grades": bench["grades"]},
+            free_text=comment
+        )
+        print(f"✅ UEQ responses saved to {file_path}")
+    except Exception as e:
+        print(f"❌ ERROR saving UEQ responses: {e}")
+        import traceback
+        traceback.print_exc()
+        st.error("❌ Error saving your responses. Please contact support.")
+        st.error(f"Technical details: {str(e)}")
+        st.stop()
     
     # Mark as submitted and completed
     st.session_state["ueq_submitted"] = True
@@ -305,7 +314,8 @@ if st.button("✅ Finish Interview", type="primary", use_container_width=True):
     import time
     time.sleep(1.5)
     
-    # Navigate to completion page
+    # Navigate to completion page - CRITICAL: must set before rerun to avoid blank page
+    st.session_state["current_page"] = "completion"
     st.rerun()
 
 st.caption("After clicking 'Finish Interview', your responses and feedback will be saved and you'll proceed to the completion page.")
