@@ -134,6 +134,11 @@ LABEL: str = config.platform.learning_section_name
 def _cleanup_on_exit():
     """Cleanup routine called on session exit."""
     try:
+        # Stop resource profiler thread if running
+        profiler = st.session_state.get("_resource_profiler")
+        if profiler:
+            profiler.stop()
+
         # Save learning logs
         get_learning_logger().save_logs(force=True)
         
@@ -156,10 +161,12 @@ atexit.register(_cleanup_on_exit)
 import os
 import sys
 import time
-import psutil
+import logging
 from pathlib import Path
 from typing import Dict, List
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 # ── third‑party ────────────────────────────────────────────────
 #import google.generativeai as genai
@@ -206,8 +213,53 @@ from learning_interaction_logger import get_learning_logger
 from session_manager import get_session_manager
 from page_timer import start as page_timer_start      # put this with the other imports
 from page_timer import dump as page_dump
+try:
+    from resource_profiler import get_resource_profiler
+except Exception as profiler_import_error:
+    get_resource_profiler = None
+    print(f"⚠️ Resource profiler unavailable: {profiler_import_error}")
 
 sm = get_session_manager()
+
+# ── Runtime Resource Profiler (Cloud Debugging) ───────────────────────
+# Enable with environment variable: RESOURCE_PROFILING=1
+# Optional stress mode: RESOURCE_STRESS_MODE=memory|cpu|both
+def _apply_resource_profiler_defaults_from_secrets() -> None:
+    """Allow Streamlit secrets to configure profiler when env vars are missing."""
+    cfg = st.secrets.get("resource_profiling", {})
+    if not cfg:
+        return
+
+    key_map = {
+        "enabled": "RESOURCE_PROFILING",
+        "interval_sec": "RESOURCE_PROFILING_INTERVAL_SEC",
+        "top_n": "RESOURCE_PROFILING_TOP_N",
+        "session_state": "RESOURCE_SESSION_STATE",
+        "stress_mode": "RESOURCE_STRESS_MODE",
+        "stress_mb_per_sec": "RESOURCE_STRESS_MB_PER_SEC",
+        "stress_max_mb": "RESOURCE_STRESS_MAX_MB",
+        "stress_cpu_workers": "RESOURCE_STRESS_CPU_WORKERS",
+        "stress_print_interval_sec": "RESOURCE_STRESS_PRINT_INTERVAL_SEC",
+    }
+
+    for secret_key, env_key in key_map.items():
+        if os.getenv(env_key) is None and secret_key in cfg:
+            os.environ[env_key] = str(cfg[secret_key])
+
+
+_apply_resource_profiler_defaults_from_secrets()
+
+resource_profiler = None
+if get_resource_profiler is not None:
+    resource_profiler = get_resource_profiler()
+    st.session_state["_resource_profiler"] = resource_profiler
+
+    if resource_profiler.enabled and not st.session_state.get("_resource_profiler_started", False):
+        resource_profiler.start()
+        st.session_state["_resource_profiler_started"] = True
+
+    if resource_profiler.enabled and os.getenv("RESOURCE_SESSION_STATE", "1").strip().lower() in {"1", "true", "yes", "on"}:
+        resource_profiler.emit_session_state_breakdown(st.session_state)
 
 if "_page_timer" not in st.session_state:
     from page_timer import start as page_timer_start
@@ -221,6 +273,38 @@ if "checkpoint_manager" not in st.session_state:
         from supabase_storage import get_supabase_storage
         storage = get_supabase_storage()
         supabase_client = storage.supabase if storage.connected else None
+
+        # Optional: stream profiler snapshots to Supabase for cloud-only crash diagnosis.
+        if resource_profiler and resource_profiler.enabled and supabase_client and not st.session_state.get("_resource_sink_set", False):
+            sink_state = {"disabled": False, "warned": False}
+
+            def _resource_snapshot_sink(payload):
+                if sink_state["disabled"]:
+                    return
+
+                row = {
+                    "session_id": getattr(sm, "session_id", None),
+                    "event_type": payload.get("event_type", "snapshot"),
+                    "language_code": getattr(sm, "language_code", None),
+                    "payload": payload,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+
+                try:
+                    supabase_client.table("resource_profiler_logs").insert(row).execute()
+                except Exception as sink_error:
+                    err = str(sink_error).lower()
+                    if "does not exist" in err or "42p01" in err:
+                        sink_state["disabled"] = True
+                        print("⚠️ resource_profiler_logs table missing; disabling profiler Supabase sink")
+                    elif not sink_state["warned"]:
+                        sink_state["warned"] = True
+                        print(f"⚠️ profiler Supabase sink error: {sink_error}")
+
+            resource_profiler.set_snapshot_sink(_resource_snapshot_sink)
+            st.session_state["_resource_sink_set"] = True
+            if DEBUG_MODE:
+                print("✓ Resource profiler Supabase sink enabled")
         
         st.session_state.checkpoint_manager = CheckpointManager(sm, supabase_client)
         st.session_state.recovery_detector = SessionRecoveryDetector(sm, supabase_client)
@@ -430,6 +514,9 @@ from Gemini_UI import load_course_content
 if not st.session_state.get("course_content_loaded", False):
     load_course_content()  # Loads slides and transcription from course files
     st.session_state["course_content_loaded"] = True
+
+    if resource_profiler.enabled:
+        resource_profiler.emit_once("course_content_loaded")
     
     # Keep only the on-disk path in session state so Streamlit resolves the
     # media from the file system on each rerun instead of holding stale bytes.
@@ -1105,6 +1192,8 @@ elif st.session_state.current_page == "learning":
                                 st.session_state.slide_image_cache[str(slide_file)] = Image.open(slide_file)
                             if DEV_MODE:
                                 print(f"📦 Loaded {len(slide_files)} slide images into memory (~{len(slide_files)} MB)")
+                            if resource_profiler.enabled:
+                                resource_profiler.emit_once("slide_image_cache_loaded")
                         
                         if DEV_MODE:
                             st.sidebar.success(f"✅ {len(slide_files)} slides loaded")
@@ -1602,6 +1691,9 @@ elif st.session_state.current_page == "completion":
         print(f"\n{'='*60}")
         print(f"📦 COMPLETION PAGE: Starting upload process at {datetime.now()}")
         print(f"{'='*60}")
+
+        if resource_profiler.enabled:
+            resource_profiler.emit_once("completion_page_start")
         
         # Show processing status
         with st.spinner("Processing your responses..."):
@@ -1633,6 +1725,9 @@ elif st.session_state.current_page == "completion":
                 from supabase_storage import get_supabase_storage
                 storage = get_supabase_storage()
                 print(f"✅ Storage initialized, connected: {storage.connected}")
+
+                if resource_profiler.enabled:
+                    resource_profiler.emit_once("pre_upload")
                 
                 session_id = session_info["session_id"]
                 
@@ -1640,6 +1735,9 @@ elif st.session_state.current_page == "completion":
                 print(f"🚀 Calling storage.upload_session_files()...")
                 success = storage.upload_session_files(sm, DEV_MODE)
                 print(f"📤 Upload result: {'SUCCESS' if success else 'FAILED'}")
+
+                if resource_profiler.enabled:
+                    resource_profiler.emit_once("post_upload")
                 
                 # Mark session as completed in presence tracker
                 if presence:
