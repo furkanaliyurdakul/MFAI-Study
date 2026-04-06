@@ -47,6 +47,24 @@ try:
     )
 except ImportError as e:
     print(f"⚠️ Data loss prevention modules not available: {e}")
+    CheckpointManager = None
+    SessionRecoveryDetector = None
+    get_continuous_backup_manager = None
+
+    def show_recovery_prompt(*args, **kwargs):
+        return None
+
+    def apply_recovered_data(*args, **kwargs):
+        return {}
+
+    def show_recovery_banner(*args, **kwargs):
+        return None
+
+    def log_recovery_event(*args, **kwargs):
+        return None
+
+    def initialize_recovery_in_session_state(*args, **kwargs):
+        return None
 
 # ── Presence Tracker (for concurrent session monitoring) ────────
 try:
@@ -102,7 +120,8 @@ def ensure_session_state_initialized():
     st.session_state.setdefault("previous_page", None)
     
     # Initialize recovery managers (data loss prevention)
-    initialize_recovery_in_session_state()
+    if callable(initialize_recovery_in_session_state):
+        initialize_recovery_in_session_state()
     
     if DEBUG_MODE:
         print("🔧 DEBUG: Session state initialization completed")
@@ -316,11 +335,11 @@ if get_resource_profiler is not None:
     resource_profiler = get_resource_profiler()
     st.session_state["_resource_profiler"] = resource_profiler
 
-    if resource_profiler.enabled and not st.session_state.get("_resource_profiler_started", False):
+    if resource_profiler and resource_profiler.enabled and not st.session_state.get("_resource_profiler_started", False):
         resource_profiler.start()
         st.session_state["_resource_profiler_started"] = True
 
-    if resource_profiler.enabled and os.getenv("RESOURCE_SESSION_STATE", "1").strip().lower() in {"1", "true", "yes", "on"}:
+    if resource_profiler and resource_profiler.enabled and os.getenv("RESOURCE_SESSION_STATE", "1").strip().lower() in {"1", "true", "yes", "on"}:
         session_state_interval = int(os.getenv("RESOURCE_SESSION_STATE_INTERVAL_SEC", "120"))
         now_ts = time.time()
         last_emit = float(st.session_state.get("_resource_session_state_last_emit", 0.0))
@@ -335,7 +354,12 @@ if "_page_timer" not in st.session_state:
 
 # ── Initialize Data Loss Prevention Managers (BEFORE AUTH LOOP) ────────────
 # Initialize checkpoint and recovery managers once per session
-if "checkpoint_manager" not in st.session_state:
+if (
+    CheckpointManager is not None
+    and SessionRecoveryDetector is not None
+    and callable(get_continuous_backup_manager)
+    and "checkpoint_manager" not in st.session_state
+):
     try:
         from supabase_storage import get_supabase_storage
         storage = get_supabase_storage()
@@ -560,7 +584,7 @@ if not st.session_state.get("course_content_loaded", False):
     load_course_content()  # Loads slides and transcription from course files
     st.session_state["course_content_loaded"] = True
 
-    if resource_profiler.enabled:
+    if resource_profiler and resource_profiler.enabled:
         resource_profiler.emit_once("course_content_loaded")
     
     # Keep only the on-disk path in session state so Streamlit resolves the
@@ -1801,7 +1825,7 @@ elif st.session_state.current_page == "completion":
         print(f"📦 COMPLETION PAGE: Starting upload process at {datetime.now()}")
         print(f"{'='*60}")
 
-        if resource_profiler.enabled:
+        if resource_profiler and resource_profiler.enabled:
             resource_profiler.emit_once("completion_page_start")
         qa_event("completion_processing_start", session_id=sm.session_id)
         
@@ -1836,7 +1860,7 @@ elif st.session_state.current_page == "completion":
                 storage = get_supabase_storage()
                 print(f"✅ Storage initialized, connected: {storage.connected}")
 
-                if resource_profiler.enabled:
+                if resource_profiler and resource_profiler.enabled:
                     resource_profiler.emit_once("pre_upload")
                 
                 session_id = session_info["session_id"]
@@ -1846,7 +1870,7 @@ elif st.session_state.current_page == "completion":
                 success = storage.upload_session_files(sm, DEV_MODE)
                 print(f"📤 Upload result: {'SUCCESS' if success else 'FAILED'}")
 
-                if resource_profiler.enabled:
+                if resource_profiler and resource_profiler.enabled:
                     resource_profiler.emit_once("post_upload")
                 
                 # Mark session as completed in presence tracker
