@@ -19,14 +19,14 @@ import streamlit as st
 logger = logging.getLogger(__name__)
 
 
-def show_recovery_prompt(detector, credentials_folder: str, language_code: str) -> Optional[bool]:
+def show_recovery_prompt(detector, credentials_folder: str, language_code: Optional[str] = None) -> Optional[bool]:
     """
     Display recovery UI if incomplete session found.
     
     Args:
         detector: SessionRecoveryDetector instance
         credentials_folder: e.g., 'dutch_cohort'
-        language_code: e.g., 'nl'
+        language_code: e.g., 'nl'. If None, searches across all languages.
     
     Returns: 
         True if user wants to resume, False if skip recovery, None if no session found

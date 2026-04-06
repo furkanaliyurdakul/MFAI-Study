@@ -35,7 +35,7 @@ class SessionRecoveryDetector:
     def find_incomplete_sessions(
         self, 
         credentials_folder: str,
-        language_code: str,
+        language_code: str = None,
         max_age_hours: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
@@ -43,7 +43,7 @@ class SessionRecoveryDetector:
         
         Args:
             credentials_folder: e.g., 'dutch_cohort', 'german_cohort'
-            language_code: e.g., 'nl', 'de'
+            language_code: e.g., 'nl', 'de'. If None, searches across all languages.
             max_age_hours: Max age of sessions to recover (default: self.hours_lookback)
         
         Returns: List of incomplete session dicts with metadata
@@ -90,8 +90,8 @@ class SessionRecoveryDetector:
                     with open(meta_file, "r", encoding="utf-8") as f:
                         session_info = json.load(f)
                     
-                    # Check language match
-                    if session_info.get("language_code") != language_code:
+                    # Check language match (if language_code is specified)
+                    if language_code and session_info.get("language_code") != language_code:
                         continue
                     
                     # Check completion status from checkpoints
@@ -103,6 +103,7 @@ class SessionRecoveryDetector:
                             "session_dir": session_dir,
                             "session_id": session_info.get("session_id"),
                             "fake_name": session_info.get("fake_name"),
+                            "language_code": session_info.get("language_code"),
                             "last_modified": last_modified.isoformat(),
                             "progress": progress,
                             "completion_percentage": sum(progress.values()) / len(progress) * 100,

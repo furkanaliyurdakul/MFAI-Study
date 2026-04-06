@@ -259,14 +259,20 @@ if "language_code" not in st.session_state:
     
     # ── Check for Abandoned Sessions (Recovery Detection) ──────────────
     # Offer users to resume incomplete sessions from same user/language
-    if credential_config and "language_code" in st.session_state:
+    # This runs REGARDLESS of whether language_code is set yet
+    # (searches across all languages if language not yet determined)
+    if credential_config:
         detector = st.session_state.get("recovery_detector")
         if detector and not DEV_MODE:  # Don't prompt in dev mode
             try:
+                # Search for incomplete sessions (language_code is optional)
+                # If language_code is set, use it. If not, find ANY incomplete session
+                language_for_search = st.session_state.get("language_code")
+                
                 recovery_choice = show_recovery_prompt(
                     detector,
                     credential_config.folder_prefix,
-                    st.session_state["language_code"]
+                    language_for_search  # Can be None - will search all languages
                 )
                 
                 if recovery_choice is True:  # User chose to resume
@@ -276,6 +282,10 @@ if "language_code" not in st.session_state:
                         recovered_data = detector.recover_session_data(session_dir_to_load)
                         
                         if recovered_data:
+                            # Use the language_code from the recovered session
+                            if "language_code" not in st.session_state:
+                                st.session_state["language_code"] = recovered_session.get("language_code", "en")
+                            
                             # Define page callbacks for restoration
                             page_callbacks = {
                                 "profile": lambda data: st.session_state.update({
