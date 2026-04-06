@@ -161,6 +161,7 @@ atexit.register(_cleanup_on_exit)
 import os
 import sys
 import time
+import gc
 import logging
 from pathlib import Path
 from typing import Dict, List
@@ -213,6 +214,25 @@ def qa_event(event: str, **fields) -> None:
         logger.info("[QA] %s", json.dumps(payload, ensure_ascii=True, separators=(",", ":")))
     except Exception as exc:
         logger.debug("qa_event_failed: %s", exc)
+
+
+def _trim_chat_history() -> None:
+    """Keep only the latest chat turns to avoid unbounded memory growth."""
+    max_pairs = max(1, int(os.getenv("CHAT_HISTORY_MAX_PAIRS", "20")))
+    max_messages = max_pairs * 2
+    messages = st.session_state.get("messages", [])
+    if len(messages) > max_messages:
+        removed = len(messages) - max_messages
+        st.session_state["messages"] = messages[-max_messages:]
+        qa_event("chat_history_trimmed", removed=removed, kept=max_messages)
+
+
+def _load_model_slide_image(slide_path: Path) -> tuple[Image.Image, tuple[int, int], tuple[int, int]]:
+    """Load one slide image for model use at full original resolution."""
+    with Image.open(slide_path) as src:
+        model_img = src.convert("RGB")
+    original_size = model_img.size
+    return model_img, original_size, model_img.size
 
 # ── third‑party ────────────────────────────────────────────────
 #import google.generativeai as genai
@@ -1250,15 +1270,16 @@ elif st.session_state.current_page == "learning":
                         st.session_state.exported_images = slide_files
                         st.session_state.slides_loaded = True
                         
-                        # Load ALL slide images into memory ONCE (26 slides × 1MB = ~26MB total)
-                        if "slide_image_cache" not in st.session_state:
-                            st.session_state.slide_image_cache = {}
-                            for slide_file in slide_files:
-                                st.session_state.slide_image_cache[str(slide_file)] = Image.open(slide_file)
-                            if DEV_MODE:
-                                print(f"📦 Loaded {len(slide_files)} slide images into memory (~{len(slide_files)} MB)")
-                            if resource_profiler.enabled:
-                                resource_profiler.emit_once("slide_image_cache_loaded")
+                        # Clear old all-slides cache from previous versions if it exists.
+                        if "slide_image_cache" in st.session_state:
+                            cached = st.session_state.pop("slide_image_cache", {})
+                            for cached_img in cached.values():
+                                try:
+                                    cached_img.close()
+                                except Exception:
+                                    pass
+                            gc.collect()
+                            qa_event("legacy_slide_cache_cleared", count=len(cached))
                         
                         if DEV_MODE:
                             st.sidebar.success(f"✅ {len(slide_files)} slides loaded")
@@ -1365,6 +1386,7 @@ elif st.session_state.current_page == "learning":
                         {"role": "assistant", "content": reply_text},
                     ]
                 )
+                _trim_chat_history()
                 qa_event(
                     "chat_reply",
                     retries=retry_count,
@@ -1421,15 +1443,9 @@ elif st.session_state.current_page == "learning":
                     slide_path = Path(slide_path)
                 
                 try:
-                    # Get image from pre-loaded memory cache (no file I/O, no PIL overhead)
-                    if "slide_image_cache" in st.session_state and str(slide_path) in st.session_state.slide_image_cache:
-                        img = st.session_state.slide_image_cache[str(slide_path)]
-                    else:
-                        # Fallback: load on demand if cache miss
-                        img = Image.open(slide_path)
-                    
+                    # Render from file path so only the selected slide is loaded per rerun.
                     caption = str(slide_path.name) if DEV_MODE else None
-                    st.image(img, caption=caption, use_column_width=True)
+                    st.image(str(slide_path), caption=caption, use_column_width=True)
                 except Exception as e:
                     st.error(f"Unable to display slide image: {str(e)}")
                     if DEV_MODE:
@@ -1498,8 +1514,8 @@ elif st.session_state.current_page == "learning":
                 if ready and selected_slide:
                     if st.button("Explain this slide", type="primary", use_container_width=True):
                         s_idx = int(selected_slide.split()[1]) - 1
-                        img = Image.open(st.session_state.exported_images[s_idx])
-                        qa_event("explain_slide_start", slide=selected_slide, slide_index=s_idx)
+                        slide_path = Path(st.session_state.exported_images[s_idx])
+                        qa_event("explain_slide_start", slide=selected_slide, slide_index=s_idx, slide_file=slide_path.name)
 
                         prompt_json = build_prompt(
                             f"Content from {selected_slide} (see slide image).",
@@ -1518,11 +1534,22 @@ elif st.session_state.current_page == "learning":
                         retry_count = 0
                         reply_text = None
                         _qa_explain_t0 = time.perf_counter()
+                        model_img = None
+                        model_size = None
+                        original_size = None
+                        try:
+                            model_img, original_size, model_size = _load_model_slide_image(slide_path)
+                        except Exception as load_err:
+                            qa_event("explain_slide_error", slide=selected_slide, error_type=type(load_err).__name__, stage="load_image")
+                            st.error(f"❌ Failed to load {selected_slide}. Please try another slide.")
+                            if DEBUG_MODE:
+                                st.exception(load_err)
+                            st.stop()
                         
                         with st.spinner(f"LLM is analyzing {selected_slide}..."):
                             while retry_count < max_retries and reply_text is None:
                                 try:
-                                    reply = st.session_state.gemini_chat.send_message([img, prompt_json], config=content_config)
+                                    reply = st.session_state.gemini_chat.send_message([model_img, prompt_json], config=content_config)
 
                                     # Ensure proper Unicode handling
                                     reply_text = reply.text
@@ -1539,6 +1566,14 @@ elif st.session_state.current_page == "learning":
                                     else:
                                         time.sleep(2)  # Wait before retry
 
+                        if model_img is not None:
+                            try:
+                                model_img.close()
+                            except Exception:
+                                pass
+                        del model_img
+                        gc.collect()
+
                         summary = create_summary_prompt(selected_slide, language_code=current_language())
                         st.session_state.messages.extend(
                             [
@@ -1546,12 +1581,15 @@ elif st.session_state.current_page == "learning":
                                 {"role": "assistant", "content": reply_text},
                             ]
                         )
+                        _trim_chat_history()
                         qa_event(
                             "explain_slide_done",
                             slide=selected_slide,
                             retries=retry_count,
                             latency_ms=int((time.perf_counter() - _qa_explain_t0) * 1000),
                             response_chars=len(reply_text or ""),
+                            image_original=f"{original_size[0]}x{original_size[1]}" if original_size else None,
+                            image_sent=f"{model_size[0]}x{model_size[1]}" if model_size else None,
                         )
                         st.session_state.learning_completed = True
                         
