@@ -32,6 +32,22 @@ credential_config = require_authentication()
 if DEBUG_MODE:
     print("🔧 DEBUG: Authentication completed")
 
+# ── Data Loss Prevention Modules ─────────────────────────────
+# Import recovery and checkpoint managers
+try:
+    from checkpoint_manager import CheckpointManager
+    from session_recovery_detector import SessionRecoveryDetector
+    from continuous_backup_manager import get_continuous_backup_manager
+    from recovery_utils import (
+        show_recovery_prompt,
+        apply_recovered_data,
+        show_recovery_banner,
+        log_recovery_event,
+        initialize_recovery_in_session_state,
+    )
+except ImportError as e:
+    print(f"⚠️ Data loss prevention modules not available: {e}")
+
 # ── Presence Tracker (for concurrent session monitoring) ────────
 try:
     from presence_tracker import get_presence_tracker
@@ -85,6 +101,9 @@ def ensure_session_state_initialized():
     # Track previous page for scroll-to-top detection
     st.session_state.setdefault("previous_page", None)
     
+    # Initialize recovery managers (data loss prevention)
+    initialize_recovery_in_session_state()
+    
     if DEBUG_MODE:
         print("🔧 DEBUG: Session state initialization completed")
 
@@ -110,8 +129,28 @@ language_names = {
 }
 
 LABEL: str = config.platform.learning_section_name
-atexit.register(lambda: get_learning_logger().save_logs(force=True))
-atexit.register(lambda: page_dump(Path(sm.session_dir)))
+
+# ── Cleanup Functions for Exit Handlers ────────────────────
+def _cleanup_on_exit():
+    """Cleanup routine called on session exit."""
+    try:
+        # Save learning logs
+        get_learning_logger().save_logs(force=True)
+        
+        # Stop backup manager if running
+        if "backup_manager" in st.session_state:
+            backup_mgr = st.session_state.get("backup_manager")
+            if backup_mgr:
+                backup_mgr.force_backup_now()  # Final backup
+                backup_mgr.stop_periodic_backup()
+                print("✓ Backup manager stopped")
+        
+        # Dump page timings
+        page_dump(Path(sm.session_dir))
+    except Exception as e:
+        print(f"⚠️ Cleanup error: {e}")
+
+atexit.register(_cleanup_on_exit)
 
 # ── std‑lib ────────────────────────────────────────────
 import os
@@ -175,6 +214,27 @@ if "_page_timer" not in st.session_state:
     
     page_timer_start("home")
 
+# ── Initialize Data Loss Prevention Managers (BEFORE AUTH LOOP) ────────────
+# Initialize checkpoint and recovery managers once per session
+if "checkpoint_manager" not in st.session_state:
+    try:
+        from supabase_storage import get_supabase_storage
+        storage = get_supabase_storage()
+        supabase_client = storage.supabase if storage.connected else None
+        
+        st.session_state.checkpoint_manager = CheckpointManager(sm, supabase_client)
+        st.session_state.recovery_detector = SessionRecoveryDetector(sm, supabase_client)
+        st.session_state.backup_manager = get_continuous_backup_manager(sm, supabase_client, interval_seconds=300)
+        
+        # Start periodic backups (background thread)
+        st.session_state.backup_manager.start_periodic_backup()
+        
+        if DEBUG_MODE:
+            print("✓ Data loss prevention managers initialized")
+    except Exception as e:
+        print(f"⚠️ Warning: Failed to initialize recovery managers: {e}")
+        # Continue anyway - backups are optional
+
 # ── Authentication-based Configuration ─────────────────────────────────
 # Language and modes are now set based on login credentials
 if "language_code" not in st.session_state:
@@ -196,6 +256,66 @@ if "language_code" not in st.session_state:
         # Default values when no authentication is active
         st.session_state["dev_mode"] = False
         st.session_state["fast_test_mode"] = False
+    
+    # ── Check for Abandoned Sessions (Recovery Detection) ──────────────
+    # Offer users to resume incomplete sessions from same user/language
+    if credential_config and "language_code" in st.session_state:
+        detector = st.session_state.get("recovery_detector")
+        if detector and not DEV_MODE:  # Don't prompt in dev mode
+            try:
+                recovery_choice = show_recovery_prompt(
+                    detector,
+                    credential_config.folder_prefix,
+                    st.session_state["language_code"]
+                )
+                
+                if recovery_choice is True:  # User chose to resume
+                    recovered_session = st.session_state.get("_recovery_session")
+                    if recovered_session:
+                        session_dir_to_load = Path(recovered_session["session_dir"])
+                        recovered_data = detector.recover_session_data(session_dir_to_load)
+                        
+                        if recovered_data:
+                            # Define page callbacks for restoration
+                            page_callbacks = {
+                                "profile": lambda data: st.session_state.update({
+                                    "profile_text": data.get("profile_text", ""),
+                                    "profile_dict": data.get("profile_dict", {}),
+                                }),
+                                "learning": lambda data: st.session_state.update({
+                                    "messages": data.get("messages", []),
+                                }),
+                                "knowledge_test": lambda data: st.session_state.update({
+                                    "test_answers": data.get("answers", {}),
+                                    "score": data.get("score"),
+                                }),
+                                "ueq": lambda data: st.session_state.update({
+                                    "ueq_responses": data.get("responses", {}),
+                                }),
+                            }
+                            
+                            # Apply recovery
+                            restored = apply_recovered_data(
+                                recovered_data,
+                                st.session_state.checkpoint_manager,
+                                page_callbacks
+                            )
+                            show_recovery_banner(restored)
+                            
+                            # Log recovery event
+                            log_recovery_event(
+                                sm,
+                                "user_initiated",
+                                {"restored_stages": list(restored.keys())}
+                            )
+                            
+                            # Update session to use recovered session directory
+                            st.session_state["_recovered_session_dir"] = str(session_dir_to_load)
+                            if DEBUG_MODE:
+                                print(f"✓ Session recovered - using directory: {session_dir_to_load}")
+            except Exception as e:
+                if DEBUG_MODE:
+                    print(f"⚠️ Recovery detection failed: {e}")
     
     # CHECK CAPACITY AND REGISTER SESSION (except for dev mode)
     if DEBUG_MODE:
@@ -282,48 +402,44 @@ if not st.session_state.get("course_content_loaded", False):
     load_course_content()  # Loads slides and transcription from course files
     st.session_state["course_content_loaded"] = True
     
-    # Load video file ONCE into session state (50 MB)
+    # Keep only the on-disk path in session state so Streamlit resolves the
+    # media from the file system on each rerun instead of holding stale bytes.
     video_path = UPLOAD_DIR_VIDEO / config.course.video_filename
-    if video_path.exists() and "video_bytes" not in st.session_state:
-        with open(video_path, "rb") as video_file:
-            st.session_state["video_bytes"] = video_file.read()
+    if video_path.exists():
+        st.session_state["video_path"] = str(video_path)
         if DEV_MODE:
-            print(f"🎥 Video loaded into memory ({len(st.session_state['video_bytes']) / 1024 / 1024:.1f} MB)")
+            print(f"🎥 Video path registered: {video_path}")
     
     if DEV_MODE:
         print(f"📚 Course content loaded: {len(st.session_state.get('exported_images', []))} slides")
 
-# ── Inject JavaScript Heartbeat ────────────────────────────────
-# This runs on every page load and keeps session active in Supabase.
-# ONLY inject heartbeat if session was successfully registered.
-#
-# IMPORTANT: components.html() creates an iframe that is destroyed on every
-# Streamlit rerun. We MUST re-inject on each rerun to keep the JS heartbeat
-# alive, but unconditional injection can trigger infinite rerun storms
-# (components.html → iframe render → Streamlit detects change → rerun → repeat).
-#
-# Solution: time-based throttle. Always inject on page changes and after
-# natural user-interaction gaps (≥2s). Skip during rapid rerun storms (<2s gap,
-# same page). The JS heartbeat pings every 20s; Supabase marks offline after 60s,
-# so brief gaps during storms are harmless.
+# ── Server-side Heartbeat (runs every rerun to keep session active) ────────────
+# This is the reliable way to track presence: as long as the user's Streamlit
+# app is running and rerunning, they stay marked as active in Supabase.
+if presence and credential_config and "language_code" in st.session_state and st.session_state.get("session_registered", False):
+    session_info = sm.get_session_info()
+    current_page = st.session_state.get("current_page", "home")
+    
+    # Send heartbeat to Supabase on every rerun
+    # This ensures continuous presence tracking even during active chat interactions
+    presence.server_heartbeat(
+        session_id=session_info["session_id"],
+        user_id=credential_config.username,
+        language_code=st.session_state["language_code"],
+        current_page=current_page
+    )
+
+# ── Inject JavaScript Heartbeat (supplementary, for eventual client-side tracking) ─
+# This runs on page transitions only (to avoid infinite loops).
+# Kept for future use but server heartbeat is now the primary mechanism.
 if presence and credential_config and "language_code" in st.session_state and st.session_state.get("session_registered", False):
     session_info = sm.get_session_info()
     current_page = st.session_state.get("current_page", "home")
 
-    _hb_now = time.monotonic()
-    _hb_last_time = st.session_state.get("_hb_inject_time", 0.0)
     _hb_last_page = st.session_state.get("_hb_inject_page", None)
-    _hb_gap = _hb_now - _hb_last_time
-
-    # Inject when: (a) page changed, OR (b) ≥2 seconds since last injection
-    # This ensures heartbeat survives normal usage (user takes ≥2s between actions)
-    # while breaking rerun storms (many reruns within milliseconds on same page).
-    _hb_should_inject = (_hb_last_page != current_page) or (_hb_gap >= 2.0)
-
-    if _hb_should_inject:
-        if _hb_last_page != current_page:
-            print(f"📡 Heartbeat active for session {session_info['session_id']}, page {current_page}")
-        st.session_state["_hb_inject_time"] = _hb_now
+    if _hb_last_page != current_page:
+        if DEBUG_MODE:
+            print(f"📡 Heartbeat re-injected: page change from {_hb_last_page} → {current_page}")
         st.session_state["_hb_inject_page"] = current_page
         presence.inject_heartbeat(
             session_id=session_info["session_id"],
@@ -676,6 +792,25 @@ elif st.session_state.current_page == "profile_survey":
     # The module handles its own review display
     if st.session_state.get("show_review", False):
         st.session_state.profile_completed = True
+        
+        # ── Checkpoint: Profile Survey Completed ──────────────────────
+        try:
+            checkpoint_manager = st.session_state.get("checkpoint_manager")
+            if checkpoint_manager:
+                profile_data = {
+                    "profile_text": st.session_state.get("profile_text", ""),
+                    "profile_dict": st.session_state.get("profile_dict", {}),
+                }
+                checkpoint_manager.create_checkpoint(
+                    stage="profile",
+                    data=profile_data,
+                    upload_to_cloud=True
+                )
+                if DEBUG_MODE:
+                    print("✓ Profile checkpoint saved")
+        except Exception as e:
+            print(f"⚠️ Failed to save profile checkpoint: {e}")
+        
         st.markdown("---")
         st.success(f"✅ Profile saved – proceed to the {LABEL} section.")
         if st.button(f"Continue to {LABEL}", use_container_width=True):
@@ -882,17 +1017,16 @@ elif st.session_state.current_page == "learning":
                 )
         else:
             # No upload access: Use pre-processed course content
-            print("🔧 DEBUG: Starting no-upload mode file loading")
             
             # Show sidebar info only once to avoid infinite rerun
             if "sidebar_course_info_shown" not in st.session_state:
                 st.sidebar.header("Course Content")
                 st.sidebar.info(f"Ask questions or request explanations about any concept")
                 st.session_state.sidebar_course_info_shown = True
+                if DEV_MODE:
+                    print("🔧 DEBUG: Loading course content (no-upload mode)")
             
             # Load pre-transcribed course content (cached)
-            if DEV_MODE:
-                print("🔧 DEBUG: About to check transcription loading")
             if not st.session_state.get("transcription_text"):
                 if DEV_MODE:
                     print("🔧 DEBUG: Loading transcription file")
@@ -1218,6 +1352,25 @@ elif st.session_state.current_page == "learning":
                             ]
                         )
                         st.session_state.learning_completed = True
+                        
+                        # ── Checkpoint: Learning Session Completed ──────────────────
+                        try:
+                            checkpoint_manager = st.session_state.get("checkpoint_manager")
+                            if checkpoint_manager:
+                                learning_data = {
+                                    "messages": st.session_state.get("messages", []),
+                                    "selected_slide": selected_slide,
+                                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                                }
+                                checkpoint_manager.create_checkpoint(
+                                    stage="learning",
+                                    data=learning_data,
+                                    upload_to_cloud=False
+                                )
+                                if DEBUG_MODE:
+                                    print("✓ Learning checkpoint saved")
+                        except Exception as e:
+                            print(f"⚠️ Failed to save learning checkpoint: {e}")
 
                         # Log & persist
                         ll = get_learning_logger()
@@ -1242,11 +1395,12 @@ elif st.session_state.current_page == "learning":
         
         # Video section (full width below)
         st.markdown("---")
-        if "video_bytes" in st.session_state:
+        if st.session_state.get("video_path"):
             st.subheader("Lecture Recording")
             try:
-                # Display video from pre-loaded session state (no file I/O)
-                st.video(st.session_state["video_bytes"])
+                # Display video directly from disk so Streamlit does not keep a
+                # stale media cache entry in session state.
+                st.video(st.session_state["video_path"])
                 if DEV_MODE:
                     st.caption(f"{config.course.course_title} - Full Lecture")
             except Exception as e:
@@ -1293,6 +1447,25 @@ elif st.session_state.current_page == "knowledge_test":
     else:
         if "score" in st.session_state:
             st.session_state.test_completed = True
+            
+            # ── Checkpoint: Knowledge Test Completed ──────────────────
+            try:
+                checkpoint_manager = st.session_state.get("checkpoint_manager")
+                if checkpoint_manager:
+                    test_data = {
+                        "answers": st.session_state.get("test_answers", {}),
+                        "score": st.session_state.get("score"),
+                        "completed_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    checkpoint_manager.create_checkpoint(
+                        stage="knowledge_test",
+                        data=test_data,
+                        upload_to_cloud=False
+                    )
+                    if DEBUG_MODE:
+                        print("✓ Knowledge test checkpoint saved")
+            except Exception as e:
+                print(f"⚠️ Failed to save knowledge test checkpoint: {e}")
 
         st.markdown("---")
         if st.session_state.test_completed:
@@ -1331,6 +1504,25 @@ elif st.session_state.current_page == "ueq_survey":
     else:
         # Check if UEQ was completed and navigate automatically
         if st.session_state.get("ueq_submitted", False) and st.session_state.get("ueq_completed", False):
+            # ── Checkpoint: UEQ Survey Completed ──────────────────────
+            try:
+                checkpoint_manager = st.session_state.get("checkpoint_manager")
+                if checkpoint_manager:
+                    ueq_data = {
+                        "responses": st.session_state.get("ueq_responses", {}),
+                        "completed_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    checkpoint_manager.create_checkpoint(
+                        stage="ueq",
+                        data=ueq_data,
+                        upload_to_cloud=False
+                    )
+                    if DEBUG_MODE:
+                        print("✓ UEQ checkpoint saved")
+            except Exception as e:
+                print(f"⚠️ Failed to save UEQ checkpoint: {e}")
+            
+            st.session_state.ueq_completed = True
             # UEQ completed via the Finish Interview button - navigate to completion
             navigate_to("completion")
 
@@ -1389,6 +1581,13 @@ elif st.session_state.current_page == "completion":
                 session_info = sm.get_session_info()
                 print(f"📋 Session ID: {session_info['session_id']}")
                 print(f"📁 Session directory: {sm.session_dir}")
+                
+                # ── Force Backup All Checkpoints ──────────────────────────────
+                print(f"💾 Forcing final checkpoint backup...")
+                backup_manager = st.session_state.get("backup_manager")
+                if backup_manager:
+                    backup_manager.force_backup_now()
+                    print(f"✓ Final checkpoint backup completed")
                 
                 # Flush any remaining logs before final analytics
                 print(f"💾 Flushing learning logs...")

@@ -31,8 +31,11 @@ class PresenceTracker:
     def inject_heartbeat(self, session_id: str, user_id: str, language_code: str, current_page: str):
         """Inject JavaScript heartbeat component that pings Supabase every 20 seconds.
         
-        This runs in the browser and continues even without Streamlit reruns.
-        Automatically stops when tab is closed or user navigates away.
+        This runs in the browser and continues to beat as user stays on a page.
+        When the page changes, heartbeat is re-injected to update current_page.
+        
+        Note: The interval is killed on Streamlit rerun, but since we only re-inject
+        on page changes, the heartbeat runs for the duration the user stays on a page.
         """
         # Get Supabase URL from secrets
         try:
@@ -48,15 +51,15 @@ class PresenceTracker:
         (function() {{
             const sessionId = "{session_id}";
             const userId = "{user_id}";
-            const languageCode = "{language_code}";
+            let languageCode = "{language_code}";
             const supabaseUrl = "{supabase_url}";
             const supabaseKey = "{supabase_anon_key}";
-            const currentPage = "{current_page}";
-            const isInInterview = ["learning", "study", "interview"].includes(currentPage);
+            let currentPage = "{current_page}";
             
             // Send heartbeat to Supabase
             async function beat() {{
                 const now = new Date().toISOString();
+                const isInInterview = ["learning", "study", "interview"].includes(currentPage);
                 
                 try {{
                     const payload = {{
@@ -74,29 +77,41 @@ class PresenceTracker:
                         headers: {{
                             'Content-Type': 'application/json',
                             'apikey': supabaseKey,
-                            'Authorization': `Bearer ${{supabaseKey}}`,
-                            'Prefer': 'resolution=merge-duplicates'
+                            'Authorization': `Bearer ${{supabaseKey}}`
                         }},
                         body: JSON.stringify(payload)
                     }});
                     
-                    if (!response.ok) {{
-                        console.log('Heartbeat response:', response.status);
+                    if (!response.ok && response.status !== 201) {{
+                        console.debug(`Heartbeat status: ${{response.status}}`);
                     }}
                 }} catch (e) {{
-                    console.warn('heartbeat failed', e);
+                    console.debug('Heartbeat network error (expected on reload):', e.message);
                 }}
             }}
             
-            // Send initial heartbeat
+            // Store interval in window to avoid duplicate intervals
+            if (!window._heartbeat_intervals) {{
+                window._heartbeat_intervals = {{}};
+            }}
+            
+            // Clear old interval if it exists for this session
+            if (window._heartbeat_intervals[sessionId]) {{
+                clearInterval(window._heartbeat_intervals[sessionId]);
+            }}
+            
+            // Send initial heartbeat immediately
             beat();
             
             // Set up interval for periodic heartbeats (every 20 seconds)
-            const heartbeatInterval = setInterval(beat, 20000);
+            window._heartbeat_intervals[sessionId] = setInterval(beat, 20000);
             
             // Cleanup on page unload
             window.addEventListener('beforeunload', function() {{
-                clearInterval(heartbeatInterval);
+                if (window._heartbeat_intervals[sessionId]) {{
+                    clearInterval(window._heartbeat_intervals[sessionId]);
+                    delete window._heartbeat_intervals[sessionId];
+                }}
             }});
         }})();
         </script>
@@ -238,6 +253,35 @@ class PresenceTracker:
         except Exception as e:
             logger.error(f"Error getting session info: {e}")
             return None
+    
+    def server_heartbeat(self, session_id: str, user_id: str, language_code: str, current_page: str):
+        """Server-side heartbeat: Update session presence from Python rerun.
+        
+        This runs every time Streamlit reruns, so as long as the user's app is active,
+        they stay marked as present. This is reliable and doesn't depend on JavaScript.
+        
+        Call this from main.py on every rerun to ensure continuous presence tracking.
+        """
+        try:
+            now = datetime.now(timezone.utc).isoformat()
+            is_in_interview = current_page in ["learning", "study", "interview"]
+            
+            self.supabase.table("presence").upsert({
+                "session_id": session_id,
+                "user_id": user_id,
+                "language_code": language_code,
+                "current_page": current_page,
+                "last_seen": now,
+                "is_in_interview": is_in_interview,
+                "status": "active",
+                "updated_at": now
+            }, on_conflict="session_id").execute()
+            
+            return True
+            
+        except Exception as e:
+            logger.debug(f"Server heartbeat failed (expected if Supabase unavailable): {e}")
+            return False
     
     def cleanup_stale_sessions(self, hours: int = 3):
         """Mark sessions as abandoned if last_seen > X hours ago.

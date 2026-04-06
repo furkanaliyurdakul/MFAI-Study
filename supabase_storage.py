@@ -367,13 +367,12 @@ class SupabaseStorage:
                             st.text(info)
             
             if uploaded_files:
-                st.success(f"🎉 Successfully uploaded {len(uploaded_files)} files to cloud storage!")
-                st.success("✅ All session data has been preserved for research analysis.")
                 if dev_mode:
+                    st.success(f"🎉 Successfully uploaded {len(uploaded_files)} files to cloud storage!")
+                    st.success("✅ All session data has been preserved for research analysis.")
                     st.info(f"Session ID: {session_id}")
                 
                 # Show uploaded files in expander (only in dev mode)
-                if dev_mode:
                     with st.expander(f"📁 View uploaded files ({len(uploaded_files)} files)"):
                         for file_name in sorted(uploaded_files):
                             st.text(f"✅ {file_name}")

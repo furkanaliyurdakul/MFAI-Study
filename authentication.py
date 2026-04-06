@@ -208,7 +208,7 @@ class AuthenticationManager:
             "show_review", "gemini_chat", "_page_timer", "session_initialized",
             "transcription_loaded", "slides_loaded", "gemini_chat_initialized",
             "capacity_checked", "interview_access_granted", "session_registered",
-            "session_manager", "previous_page"  # Clear SessionManager to force new session_id on next login
+            "session_manager", "previous_page", "slide_image_cache"  # Clear SessionManager to force new session_id on next login; slide_image_cache holds PIL Images (~26MB)
         ]
         
         for key in session_keys_to_clear:
