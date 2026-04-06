@@ -168,6 +168,52 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
+try:
+    import psutil as _qa_psutil
+except Exception:
+    _qa_psutil = None
+
+_qa_proc = _qa_psutil.Process(os.getpid()) if _qa_psutil is not None else None
+_QA_TRACE_ENABLED = os.getenv("QA_TRACE", "1").strip().lower() in {"1", "true", "yes", "on"}
+_QA_COMPACT_LOGS = os.getenv("QA_COMPACT_LOGS", "1").strip().lower() in {"1", "true", "yes", "on"}
+
+# Keep terminal logs focused on actionable QA events.
+if _QA_COMPACT_LOGS:
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("google_genai.models").setLevel(logging.WARNING)
+
+
+def _qa_mem_mb() -> float | None:
+    if _qa_proc is None:
+        return None
+    try:
+        return round(_qa_proc.memory_info().rss / (1024 * 1024), 2)
+    except Exception:
+        return None
+
+
+def qa_event(event: str, **fields) -> None:
+    """Compact, removable QA trace helper.
+
+    Toggle with QA_TRACE=0. Designed to correlate user/system actions with memory.
+    """
+    if not _QA_TRACE_ENABLED:
+        return
+
+    try:
+        payload = {
+            "event": event,
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "page": st.session_state.get("current_page", "home"),
+            "rerun": st.session_state.get("_rerun_count", 0),
+            "rss_mb": _qa_mem_mb(),
+            **fields,
+        }
+        logger.info("[QA] %s", json.dumps(payload, ensure_ascii=True, separators=(",", ":")))
+    except Exception as exc:
+        logger.debug("qa_event_failed: %s", exc)
+
 # ── third‑party ────────────────────────────────────────────────
 #import google.generativeai as genai
 #from google.genai.types import Content, Part
@@ -285,38 +331,6 @@ if "checkpoint_manager" not in st.session_state:
         from supabase_storage import get_supabase_storage
         storage = get_supabase_storage()
         supabase_client = storage.supabase if storage.connected else None
-
-        # Optional: stream profiler snapshots to Supabase for cloud-only crash diagnosis.
-        if resource_profiler and resource_profiler.enabled and supabase_client and not st.session_state.get("_resource_sink_set", False):
-            sink_state = {"disabled": False, "warned": False}
-
-            def _resource_snapshot_sink(payload):
-                if sink_state["disabled"]:
-                    return
-
-                row = {
-                    "session_id": getattr(sm, "session_id", None),
-                    "event_type": payload.get("event_type", "snapshot"),
-                    "language_code": getattr(sm, "language_code", None),
-                    "payload": payload,
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                }
-
-                try:
-                    supabase_client.table("resource_profiler_logs").insert(row).execute()
-                except Exception as sink_error:
-                    err = str(sink_error).lower()
-                    if "does not exist" in err or "42p01" in err:
-                        sink_state["disabled"] = True
-                        print("⚠️ resource_profiler_logs table missing; disabling profiler Supabase sink")
-                    elif not sink_state["warned"]:
-                        sink_state["warned"] = True
-                        print(f"⚠️ profiler Supabase sink error: {sink_error}")
-
-            resource_profiler.set_snapshot_sink(_resource_snapshot_sink)
-            st.session_state["_resource_sink_set"] = True
-            if DEBUG_MODE:
-                print("✓ Resource profiler Supabase sink enabled")
         
         st.session_state.checkpoint_manager = CheckpointManager(sm, supabase_client)
         st.session_state.recovery_detector = SessionRecoveryDetector(sm, supabase_client)
@@ -520,6 +534,16 @@ FAST_TEST_MODE: bool = st.session_state.get("fast_test_mode", False)
 TOPIC: str = config.course.course_title
 API_KEY: str = st.secrets["google"]["api_key"]
 
+if not st.session_state.get("_qa_bootstrap_logged", False):
+    qa_event(
+        "app_bootstrap",
+        dev_mode=DEV_MODE,
+        fast_test_mode=FAST_TEST_MODE,
+        language=st.session_state.get("language_code"),
+        profiler_enabled=bool(resource_profiler and resource_profiler.enabled),
+    )
+    st.session_state["_qa_bootstrap_logged"] = True
+
 # ── Load Course Content (slides + transcription) ───────────────
 # This loads the actual course materials that are the same for all users
 from Gemini_UI import load_course_content
@@ -593,6 +617,7 @@ if current_page != previous_page:
     )
     # Update previous page tracker
     st.session_state["previous_page"] = current_page
+    qa_event("page_changed", previous_page=previous_page, current_page=current_page)
     if DEBUG_MODE:
         print(f"🔧 DEBUG: Page changed from '{previous_page}' to '{current_page}' - scrolling to top")
 
@@ -609,6 +634,7 @@ def navigate_to(page: str) -> None:
 
     # DEV MODE GOD MODE: Skip all checks
     if DEV_MODE:
+        qa_event("navigate", mode="dev", from_page=st.session_state.get("current_page"), to_page=page, allowed=True)
         page_dump(Path(sm.session_dir))
         page_timer_start(page)
         st.session_state.current_page = page
@@ -616,20 +642,24 @@ def navigate_to(page: str) -> None:
         return
 
     allowed = False
+    block_reason = None
     if page == "profile_survey":
         # Require consent before accessing profile survey
         allowed = st.session_state.get("consent_given", False)
         if not allowed:
+            block_reason = "consent_missing"
             st.warning("Please read the study information and give your consent on the Home page first.")
     elif page == "learning":
         allowed = st.session_state.profile_completed
         if not allowed:
+            block_reason = "profile_incomplete"
             st.warning(config.ui_text.warning_complete_profile)
     elif page == "knowledge_test":
         allowed = (
             st.session_state.profile_completed and st.session_state.learning_completed
         )
         if not allowed:
+            block_reason = "learning_prerequisites_missing"
             st.warning(
                 "Please finish the profile survey and explore the learning content first."
             )
@@ -640,6 +670,7 @@ def navigate_to(page: str) -> None:
             and st.session_state.test_completed
         )
         if not allowed:
+            block_reason = "knowledge_test_incomplete"
             st.warning("Please finish all previous components before the UEQ survey.")
     elif page == "completion":
         # Completion page - only accessible if everything is done
@@ -650,15 +681,19 @@ def navigate_to(page: str) -> None:
             and st.session_state.ueq_completed
         )
         if not allowed:
+            block_reason = "ueq_incomplete"
             st.warning("Please complete all interview components first.")
     elif page == "home":
         allowed = True
 
     if allowed:
+        qa_event("navigate", mode="normal", from_page=st.session_state.get("current_page"), to_page=page, allowed=True)
         page_dump(Path(sm.session_dir))
         page_timer_start(page)
         st.session_state.current_page  = page
         st.rerun()
+    else:
+        qa_event("navigate", mode="normal", from_page=st.session_state.get("current_page"), to_page=page, allowed=False, reason=block_reason)
 
 
 # ───────────────────────────────────────────────────────────────
@@ -851,6 +886,7 @@ Thank you for helping us understand how language affects AI-assisted learning!
             sm = get_session_manager()
             session_info = sm.get_session_info()
             analytics.update_consent(session_info["session_id"])
+        qa_event("consent_given", session_id=sm.session_id)
 
     # — facilitator: choose study condition --------------------------------
 #    if "condition_chosen" not in st.session_state:
@@ -898,6 +934,7 @@ Thank you for helping us understand how language affects AI-assisted learning!
         use_container_width=True,
         disabled=not st.session_state.get("consent_given", False),
     ):
+        qa_event("start_profile_clicked", consent_given=bool(st.session_state.get("consent_given", False)))
         if st.session_state.get("consent_given", False):
             navigate_to("profile_survey")
         else:
@@ -1128,18 +1165,34 @@ elif st.session_state.current_page == "learning":
             if audio_up is not None:
                 a_path = UPLOAD_DIR_AUDIO / audio_up.name
                 a_path.write_bytes(audio_up.getbuffer())
+                qa_event("audio_uploaded", filename=audio_up.name, bytes=a_path.stat().st_size)
                 st.sidebar.success(f"Saved {audio_up.name}")
                 if st.sidebar.button("Transcribe Audio"):
+                    _qa_t0 = time.perf_counter()
                     st.session_state.transcription_text = transcribe_audio_from_file(a_path)
+                    qa_event(
+                        "audio_transcribed",
+                        filename=audio_up.name,
+                        latency_ms=int((time.perf_counter() - _qa_t0) * 1000),
+                        chars=len(st.session_state.transcription_text or ""),
+                    )
                     st.sidebar.success("Transcription complete!")
 
             # Handle PPT upload ---------------------------------------------
             if ppt_up is not None:
                 p_path = UPLOAD_DIR_PPT / ppt_up.name
                 p_path.write_bytes(ppt_up.getbuffer())
+                qa_event("ppt_uploaded", filename=ppt_up.name, bytes=p_path.stat().st_size)
                 st.sidebar.success(f"Saved {ppt_up.name}")
                 if st.sidebar.button("Process PPT"):
+                    _qa_t0 = time.perf_counter()
                     st.session_state.exported_images = process_ppt_file(p_path)
+                    qa_event(
+                        "ppt_processed",
+                        filename=ppt_up.name,
+                        latency_ms=int((time.perf_counter() - _qa_t0) * 1000),
+                        slides=len(st.session_state.exported_images or []),
+                    )
                     st.sidebar.success(
                         f"Exported {len(st.session_state.exported_images)} slides"
                 )
@@ -1263,6 +1316,7 @@ elif st.session_state.current_page == "learning":
             # Chat input section (placed right after messages) ---------------------------------------
             user_chat = st.chat_input("Ask a follow‑up question …")
             if user_chat:
+                qa_event("chat_submit", chars=len(user_chat), language=current_language())
                 payload = json.dumps({
                     **make_base_context(
                         language_code=current_language()
@@ -1280,6 +1334,7 @@ elif st.session_state.current_page == "learning":
                 max_retries = 3
                 retry_count = 0
                 reply_text = None
+                _qa_chat_t0 = time.perf_counter()
                 
                 with st.spinner("Generating response..."):
                     while retry_count < max_retries and reply_text is None:
@@ -1296,6 +1351,7 @@ elif st.session_state.current_page == "learning":
                         except Exception as e:
                             retry_count += 1
                             if retry_count >= max_retries:
+                                qa_event("chat_error", error_type=type(e).__name__, retries=retry_count)
                                 st.error("❌ Failed to get AI response. Please try again or contact the research team.")
                                 if DEBUG_MODE:
                                     st.exception(e)
@@ -1308,6 +1364,12 @@ elif st.session_state.current_page == "learning":
                         {"role": "user", "content": user_chat},
                         {"role": "assistant", "content": reply_text},
                     ]
+                )
+                qa_event(
+                    "chat_reply",
+                    retries=retry_count,
+                    latency_ms=int((time.perf_counter() - _qa_chat_t0) * 1000),
+                    response_chars=len(reply_text or ""),
                 )
                 get_learning_logger().log_interaction(
                     interaction_type="chat",
@@ -1437,6 +1499,7 @@ elif st.session_state.current_page == "learning":
                     if st.button("Explain this slide", type="primary", use_container_width=True):
                         s_idx = int(selected_slide.split()[1]) - 1
                         img = Image.open(st.session_state.exported_images[s_idx])
+                        qa_event("explain_slide_start", slide=selected_slide, slide_index=s_idx)
 
                         prompt_json = build_prompt(
                             f"Content from {selected_slide} (see slide image).",
@@ -1454,6 +1517,7 @@ elif st.session_state.current_page == "learning":
                         max_retries = 3
                         retry_count = 0
                         reply_text = None
+                        _qa_explain_t0 = time.perf_counter()
                         
                         with st.spinner(f"LLM is analyzing {selected_slide}..."):
                             while retry_count < max_retries and reply_text is None:
@@ -1467,6 +1531,7 @@ elif st.session_state.current_page == "learning":
                                 except Exception as e:
                                     retry_count += 1
                                     if retry_count >= max_retries:
+                                        qa_event("explain_slide_error", slide=selected_slide, error_type=type(e).__name__, retries=retry_count)
                                         st.error(f"❌ Failed to generate explanation for {selected_slide}. Please try again.")
                                         if DEBUG_MODE:
                                             st.exception(e)
@@ -1480,6 +1545,13 @@ elif st.session_state.current_page == "learning":
                                 {"role": "user", "content": summary},
                                 {"role": "assistant", "content": reply_text},
                             ]
+                        )
+                        qa_event(
+                            "explain_slide_done",
+                            slide=selected_slide,
+                            retries=retry_count,
+                            latency_ms=int((time.perf_counter() - _qa_explain_t0) * 1000),
+                            response_chars=len(reply_text or ""),
                         )
                         st.session_state.learning_completed = True
                         
@@ -1706,6 +1778,7 @@ elif st.session_state.current_page == "completion":
 
         if resource_profiler.enabled:
             resource_profiler.emit_once("completion_page_start")
+        qa_event("completion_processing_start", session_id=sm.session_id)
         
         # Show processing status
         with st.spinner("Processing your responses..."):
@@ -1782,15 +1855,18 @@ elif st.session_state.current_page == "completion":
                     analytics.mark_completed(session_id)
                 
                 if success:
+                    qa_event("completion_upload_result", success=True, session_id=session_id)
                     st.success("✅ Your responses have been successfully processed and uploaded!")
                     if DEV_MODE:
                         st.info(f"Session ID: `{session_id}`")
                 else:
+                    qa_event("completion_upload_result", success=False, session_id=session_id)
                     if DEV_MODE:
                         st.info("✅ Your responses have been saved locally.")
                         st.warning("⚠️ Cloud backup experienced some issues, but your data is secure.")
                 
             except Exception as e:
+                qa_event("completion_upload_error", error_type=type(e).__name__)
                 #st.info("✅ Your responses have been saved locally.")
                 if DEV_MODE:
                     st.warning(f"⚠️ Upload processing had issues: {str(e)}")

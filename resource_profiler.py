@@ -113,6 +113,10 @@ class ResourceProfiler:
         self.include_tracemalloc = _env_bool("RESOURCE_INCLUDE_TRACEMALLOC", False)
         self.include_tracemalloc_growth = _env_bool("RESOURCE_INCLUDE_TRACEMALLOC_GROWTH", True)
         self.min_growth_mb = _safe_float("RESOURCE_MIN_GROWTH_MB", 1.0)
+        self.compact = _env_bool("RESOURCE_COMPACT", True)
+        self.log_io = _env_bool("RESOURCE_LOG_IO", False)
+        self.log_open_files = _env_bool("RESOURCE_LOG_OPEN_FILES", False)
+        self.log_children = _env_bool("RESOURCE_LOG_CHILDREN", False)
 
         self.stress_mode = os.getenv("RESOURCE_STRESS_MODE", "off").strip().lower()
         if self.stress_mode not in {"off", "memory", "cpu", "both"}:
@@ -132,7 +136,6 @@ class ResourceProfiler:
         self._last_emit = 0.0
         self._last_stress_emit = 0.0
         self._snapshot_count = 0
-        self._snapshot_sink = None
         self._prev_tm_snapshot = None
         self._prev_rss = None
         self._prev_ts = None
@@ -176,10 +179,6 @@ class ResourceProfiler:
     def stop(self) -> None:
         self._stop_event.set()
 
-    def set_snapshot_sink(self, sink_callable) -> None:
-        """Register callback that receives structured snapshot payloads."""
-        self._snapshot_sink = sink_callable
-
     def emit_once(self, tag: str = "manual") -> None:
         if not self.enabled:
             return
@@ -207,6 +206,7 @@ class ResourceProfiler:
             f"expensive_every={self.expensive_every} include_threads={self.include_threads} "
             f"include_gc={self.include_gc} include_tracemalloc={self.include_tracemalloc} "
             f"include_tracemalloc_growth={self.include_tracemalloc_growth} min_growth_mb={self.min_growth_mb:.2f} "
+            f"compact={self.compact} "
             f"stress_mode={self.stress_mode} stress_mb_per_sec={self.stress_mb_per_sec} "
             f"stress_max_mb={self.stress_max_mb} stress_cpu_workers={self.stress_cpu_workers}"
         )
@@ -241,14 +241,6 @@ class ResourceProfiler:
             except Exception:
                 io = None
 
-        print("[RESOURCE]" + "=" * 70)
-        print(f"[RESOURCE] snapshot tag={tag} ts={ts} pid={self._proc.pid}")
-        print(
-            "[RESOURCE] process "
-            f"cpu_percent={cpu_percent:.2f} rss={_format_bytes(rss)} vms={_format_bytes(vms)} "
-            f"uss={_format_bytes(uss)} pss={_format_bytes(pss)} threads={thr_count}"
-        )
-
         # Memory trend line (the most useful signal for leaks)
         rss_delta = 0
         seconds_delta = 0.0
@@ -257,25 +249,42 @@ class ResourceProfiler:
             rss_delta = rss - self._prev_rss
             seconds_delta = max(0.001, time.time() - self._prev_ts)
             rss_rate_per_min = (rss_delta / seconds_delta) * 60.0
-        print(
-            "[RESOURCE] memory_trend "
-            f"rss_delta={_format_bytes(rss_delta)} over_sec={seconds_delta:.1f} "
-            f"rss_rate_per_min={_format_bytes(int(rss_rate_per_min))}"
-        )
-        print(
-            "[RESOURCE] cpu_times "
-            f"user={cpu_times.user:.2f}s system={cpu_times.system:.2f}s"
-        )
+        if self.compact:
+            print(
+                "[RESOURCE] snapshot "
+                f"tag={tag} ts={ts} pid={self._proc.pid} "
+                f"cpu={cpu_percent:.2f}% rss={_format_bytes(rss)} uss={_format_bytes(uss)} "
+                f"threads={thr_count} rss_delta={_format_bytes(rss_delta)} "
+                f"rss_rate_per_min={_format_bytes(int(rss_rate_per_min))}"
+            )
+        else:
+            print("[RESOURCE]" + "=" * 70)
+            print(f"[RESOURCE] snapshot tag={tag} ts={ts} pid={self._proc.pid}")
+            print(
+                "[RESOURCE] process "
+                f"cpu_percent={cpu_percent:.2f} rss={_format_bytes(rss)} vms={_format_bytes(vms)} "
+                f"uss={_format_bytes(uss)} pss={_format_bytes(pss)} threads={thr_count}"
+            )
+            print(
+                "[RESOURCE] memory_trend "
+                f"rss_delta={_format_bytes(rss_delta)} over_sec={seconds_delta:.1f} "
+                f"rss_rate_per_min={_format_bytes(int(rss_rate_per_min))}"
+            )
+            print(
+                "[RESOURCE] cpu_times "
+                f"user={cpu_times.user:.2f}s system={cpu_times.system:.2f}s"
+            )
 
-        if io:
+        if io and (self.log_io or not self.compact):
             print(
                 "[RESOURCE] io "
                 f"read_count={io.read_count} write_count={io.write_count} "
                 f"read_bytes={_format_bytes(io.read_bytes)} write_bytes={_format_bytes(io.write_bytes)}"
             )
 
-        print(f"[RESOURCE] open_files count={len(open_files)}")
-        if expensive_tick:
+        if self.log_open_files or not self.compact:
+            print(f"[RESOURCE] open_files count={len(open_files)}")
+        if expensive_tick and (self.log_open_files or not self.compact):
             for f in open_files[: self.top_n]:
                 print(f"[RESOURCE] open_file path={f.path}")
 
@@ -287,10 +296,11 @@ class ResourceProfiler:
                 child_cpu += c.cpu_percent(interval=None)
             except Exception:
                 continue
-        print(
-            "[RESOURCE] children "
-            f"count={len(children)} total_rss={_format_bytes(child_mem)} total_cpu_percent={child_cpu:.2f}"
-        )
+        if self.log_children or not self.compact:
+            print(
+                "[RESOURCE] children "
+                f"count={len(children)} total_rss={_format_bytes(child_mem)} total_cpu_percent={child_cpu:.2f}"
+            )
 
         if self.include_threads and expensive_tick:
             self._emit_thread_cpu()
@@ -305,36 +315,7 @@ class ResourceProfiler:
             total_stress_mb = sum(len(x) for x in self._mem_chunks) / (1024 * 1024)
             print(f"[RESOURCE] stress_memory allocated_mb={total_stress_mb:.2f}")
 
-        snapshot_payload = {
-            "event_type": "snapshot",
-            "tag": tag,
-            "timestamp": ts,
-            "pid": self._proc.pid,
-            "cpu_percent": cpu_percent,
-            "rss_bytes": rss,
-            "rss_delta_bytes": rss_delta,
-            "rss_rate_per_min_bytes": int(rss_rate_per_min),
-            "vms_bytes": vms,
-            "uss_bytes": uss,
-            "pss_bytes": pss,
-            "thread_count": thr_count,
-            "open_files_count": len(open_files),
-            "open_files": [f.path for f in open_files[: self.top_n]],
-            "children_count": len(children),
-            "children_total_rss_bytes": child_mem,
-            "children_total_cpu_percent": child_cpu,
-            "cpu_user_seconds": cpu_times.user,
-            "cpu_system_seconds": cpu_times.system,
-            "io": {
-                "read_count": getattr(io, "read_count", 0) if io else 0,
-                "write_count": getattr(io, "write_count", 0) if io else 0,
-                "read_bytes": getattr(io, "read_bytes", 0) if io else 0,
-                "write_bytes": getattr(io, "write_bytes", 0) if io else 0,
-            },
-            "stress_mode": self.stress_mode,
-            "stress_allocated_mb": (sum(len(x) for x in self._mem_chunks) / (1024 * 1024)) if self.stress_mode in {"memory", "both"} else 0,
-        }
-        self._push_snapshot(snapshot_payload)
+        # Removed snapshot payload creation and pushing
 
         self._prev_rss = rss
         self._prev_ts = time.time()
@@ -477,32 +458,8 @@ class ResourceProfiler:
                 print("[RESOURCE] session_state_growth none_above_threshold=true")
 
             self._last_session_state_sizes = current_sizes
-
-            self._push_snapshot(
-                {
-                    "event_type": "session_state",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "keys_count": len(rows),
-                    "growing_keys": [
-                        {"key": key, "delta_bytes": diff}
-                        for key, diff in growth_rows[: self.top_n]
-                    ],
-                    "top_keys": [
-                        {"key": key, "type": tname, "approx_size_bytes": size}
-                        for key, size, tname in rows[: self.top_n]
-                    ],
-                }
-            )
         except Exception as exc:
             print(f"[RESOURCE] session_state_breakdown_failed error={type(exc).__name__}: {exc}")
-
-    def _push_snapshot(self, payload: dict[str, Any]) -> None:
-        if self._snapshot_sink is None:
-            return
-        try:
-            self._snapshot_sink(payload)
-        except Exception as exc:
-            print(f"[RESOURCE] sink_failed error={type(exc).__name__}: {exc}")
 
     def _run_memory_stress(self) -> None:
         while not self._stop_event.is_set():
