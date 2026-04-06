@@ -63,6 +63,7 @@ class CheckpointManager:
                 "data": data,
                 "metadata": {
                     "fake_name": session_info.get("fake_name"),
+                    "login_username": session_info.get("login_username"),  # Add login user
                     "language_code": session_info.get("language_code"),
                     "credentials_folder": session_info.get("credentials_folder", "unknown"),
                 }
@@ -72,6 +73,15 @@ class CheckpointManager:
             checkpoint_file = self.checkpoints_dir / f"{stage}_checkpoint.json"
             with open(checkpoint_file, "w", encoding="utf-8") as f:
                 json.dump(checkpoint, f, indent=2, ensure_ascii=False)
+            
+            # Also save session_info.json for recovery detection
+            # (recovery detector looks for this to match by login_username)
+            meta_dir = Path(self.session_manager.session_dir) / "meta"
+            meta_dir.mkdir(exist_ok=True)
+            
+            session_info_file = meta_dir / "session_info.json"
+            with open(session_info_file, "w", encoding="utf-8") as f:
+                json.dump(session_info, f, indent=2, ensure_ascii=False)
             
             logger.info(f"✓ Checkpoint created: {stage} at {checkpoint_file}")
             

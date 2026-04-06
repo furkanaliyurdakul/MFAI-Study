@@ -72,13 +72,20 @@ LAST_NAMES = [
 class SessionManager:
     """Manages session data and file organization for the multilingual learning platform."""
 
-    def __init__(self, language_code: str | None = None):
-        """Initialize the session manager."""
+    def __init__(self, language_code: str | None = None, login_username: str | None = None):
+        """Initialize the session manager.
+        
+        Args:
+            language_code: Language code for the session
+            login_username: The actual login username (e.g., 'dutch_learner')
+                          Used for recovery matching instead of random fake_name
+        """
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         self.output_dir = os.path.join(self.base_dir, "output")
         os.makedirs(self.output_dir, exist_ok=True)
 
         self.language_code = language_code or "en"  # default to English
+        self.login_username = login_username  # Store actual login user
         
         # Get credential-based folder prefix if available
         self.folder_prefix = self._get_credential_folder_prefix()
@@ -99,6 +106,9 @@ class SessionManager:
                 # Update language_code from credential if available
                 if hasattr(config, 'language_code'):
                     self.language_code = config.language_code
+                # Store username from credential if available
+                if hasattr(config, 'username') and not self.login_username:
+                    self.login_username = config.username
                 return config.folder_prefix
             else:
                 return "unknown_user"
@@ -383,6 +393,7 @@ class SessionManager:
             "timestamp": self.session_id.split("_", 1)[0] if hasattr(self, "session_id") else None,
             "session_dir": getattr(self, "session_dir", None),
             "language_code": getattr(self, "language_code", None),
+            "login_username": getattr(self, "login_username", None),  # Actual login user
         }
         
         # Try to load experiment metadata if available

@@ -258,20 +258,22 @@ if "language_code" not in st.session_state:
         st.session_state["fast_test_mode"] = False
     
     # ── Check for Abandoned Sessions (Recovery Detection) ──────────────
-    # Offer users to resume incomplete sessions from same user/language
-    # This runs REGARDLESS of whether language_code is set yet
-    # (searches across all languages if language not yet determined)
+    # Offer users to resume incomplete sessions from SAME LOGIN USER
+    # (not by random fake_name - searches by actual login credentials)
     if credential_config:
         detector = st.session_state.get("recovery_detector")
         if detector and not DEV_MODE:  # Don't prompt in dev mode
             try:
-                # Search for incomplete sessions (language_code is optional)
-                # If language_code is set, use it. If not, find ANY incomplete session
+                # Get language if available (optional)
                 language_for_search = st.session_state.get("language_code")
+                
+                # Get actual login username (NOT random fake_name)
+                login_username = credential_config.username
                 
                 recovery_choice = show_recovery_prompt(
                     detector,
                     credential_config.folder_prefix,
+                    login_username,  # Match by actual login user
                     language_for_search  # Can be None - will search all languages
                 )
                 

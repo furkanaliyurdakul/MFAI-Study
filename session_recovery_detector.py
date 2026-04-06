@@ -35,14 +35,17 @@ class SessionRecoveryDetector:
     def find_incomplete_sessions(
         self, 
         credentials_folder: str,
+        login_username: str,
         language_code: str = None,
         max_age_hours: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
-        Find incomplete sessions for this user/language.
+        Find incomplete sessions for this specific login user and language.
         
         Args:
             credentials_folder: e.g., 'dutch_cohort', 'german_cohort'
+            login_username: The actual login username (e.g., 'dutch_learner', 'dev')
+                           Used to filter sessions for the logged-in user
             language_code: e.g., 'nl', 'de'. If None, searches across all languages.
             max_age_hours: Max age of sessions to recover (default: self.hours_lookback)
         
@@ -90,6 +93,11 @@ class SessionRecoveryDetector:
                     with open(meta_file, "r", encoding="utf-8") as f:
                         session_info = json.load(f)
                     
+                    # IMPORTANT: Filter by actual login username
+                    # (not by random fake_name)
+                    if session_info.get("login_username") != login_username:
+                        continue
+                    
                     # Check language match (if language_code is specified)
                     if language_code and session_info.get("language_code") != language_code:
                         continue
@@ -103,6 +111,7 @@ class SessionRecoveryDetector:
                             "session_dir": session_dir,
                             "session_id": session_info.get("session_id"),
                             "fake_name": session_info.get("fake_name"),
+                            "login_username": session_info.get("login_username"),
                             "language_code": session_info.get("language_code"),
                             "last_modified": last_modified.isoformat(),
                             "progress": progress,
@@ -175,14 +184,22 @@ class SessionRecoveryDetector:
     def get_recovery_suggestion(
         self,
         credentials_folder: str,
-        language_code: str
+        login_username: str,
+        language_code: str = None
     ) -> Optional[Dict[str, Any]]:
         """
         Get the top incomplete session to suggest for recovery.
         
+        Args:
+            credentials_folder: e.g., 'dutch_cohort'
+            login_username: The actual login user (e.g., 'dutch_learner')
+            language_code: Optional language filter
+        
         Returns: Session to recover or None if no incomplete sessions found
         """
-        incomplete = self.find_incomplete_sessions(credentials_folder, language_code)
+        incomplete = self.find_incomplete_sessions(
+            credentials_folder, login_username, language_code
+        )
         
         if incomplete:
             return incomplete[0]  # Most recent incomplete session
