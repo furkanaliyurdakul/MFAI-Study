@@ -63,7 +63,7 @@ output/
 | `main.py` | navigation, page timer, session wiring, language routing |
 | `Gemini_UI.py` | multilingual tutor UI & helpers (preview-only mode) |
 | `session_manager.py` | directory & pseudonym handling, analytics consolidation |
-| `personalized_learning_logger.py` | buffered file logger for tutor interactions |
+| `learning_interaction_logger.py` | buffered file logger for tutor interactions |
 | `testui_profilesurvey.py` | student‑profile questionnaire |
 | `testui_knowledgetest.py` | 5‑item multiple‑choice quiz (Q5 partial credit) |
 | `testui_ueqsurvey.py` | 26‑item UEQ short form + benchmark (reverse-coded) |
@@ -122,20 +122,9 @@ This platform includes a comprehensive analytics system that automatically conso
 - **Knowledge test**: Answers, accuracy, performance metrics
 - **Summary metrics**: Learning efficiency, engagement patterns
 
-### Analytics Tools
+### Analytics & Deployment Tools
 
-```bash
-# Generate final analytics for all sessions
-python generate_final_analytics.py
-
-# Generate for specific session
-python generate_final_analytics.py --session 20250922_142955_Winter_Smith
-
-# Create aggregate research analysis
-python analyze_research_data.py
-```
-
-See **`ANALYTICS_DOCUMENTATION.md`** for complete details on the analytics system and research data structure.
+Operational scripts for Supabase deployment/verification and analytics sync are available in the `tools/` directory.
 
 ---
 ## 🚀 Quick Start
@@ -159,7 +148,7 @@ python -m venv .venv
 source .venv/bin/activate
 
 # Install dependencies
-pip install -r requirements_fixed.txt
+pip install -r requirements.txt
 ```
 
 ### Running Locally
@@ -186,9 +175,8 @@ After data collection, zip the `output/` folder for analysis.
 
 ## 📖 Additional Documentation
 
-- **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** – Production deployment instructions
-- **[ANALYTICS_DOCUMENTATION.md](ANALYTICS_DOCUMENTATION.md)** – Analytics schema and metrics
-- **[docs/](docs/)** – Technical documentation and guides
+- **`tools/`** – Deployment, migration, verification, and sync scripts
+- **`docs/`** – Consent and participant information PDFs
 
 ## 🔒 Privacy & Ethics
 
