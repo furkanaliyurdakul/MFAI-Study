@@ -20,8 +20,8 @@ import atexit
 import json
 import streamlit as st
 
-# Import DEBUG_MODE before any debug prints
-from config import DEBUG_MODE
+# Import DEBUG_MODE and DEV_MODE before any debug prints
+from config import DEBUG_MODE, DEV_MODE
 
 # ── Page Config (MUST BE FIRST STREAMLIT COMMAND) ──────────────
 st.set_page_config(page_title="AI Learning Platform", layout="wide")

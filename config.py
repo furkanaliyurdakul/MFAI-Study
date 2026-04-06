@@ -15,6 +15,9 @@ from typing import Dict, List
 # Set to False in production to disable all debug print statements
 DEBUG_MODE = False  # Toggle this to enable/disable debug logging
 
+# Dev mode: Disables recovery prompts for faster local testing
+DEV_MODE = False  # Set to True for local testing without recovery UI
+
 
 # ═══════════════════════════════════════════════════════════════════
 # AI MODEL CONFIGURATION
