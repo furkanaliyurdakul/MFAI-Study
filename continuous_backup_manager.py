@@ -86,7 +86,10 @@ class ContinuousBackupManager:
     
     def backup_once(self) -> bool:
         """
-        Perform a single backup cycle.
+        Perform a single backup cycle (LOCAL-ONLY to minimize cloud storage).
+        
+        For limited cloud resources, periodic backups only copy to local filesystem.
+        Cloud uploads happen on force_backup_now() (completion pages).
         
         Returns: True if backup succeeded (at least partially)
         """
@@ -107,12 +110,12 @@ class ContinuousBackupManager:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "session_id": session_id,
                 "checkpoints_found": len(checkpoint_files),
-                "cloud_uploads": 0,
                 "local_backups": 0,
-                "failed": 0,
+                "skipped": 0,
             }
             
-            # Upload each checkpoint
+            # Periodic backups are LOCAL-ONLY to save cloud storage
+            # (Cloud uploads only happen on force_backup_now() for completion)
             for checkpoint_file in checkpoint_files:
                 try:
                     with open(checkpoint_file, "r", encoding="utf-8") as f:
@@ -120,26 +123,18 @@ class ContinuousBackupManager:
                     
                     stage = checkpoint_data.get("stage", "unknown")
                     
-                    # Try cloud upload
-                    cloud_success = self._upload_checkpoint_to_cloud(
-                        session_id, stage, checkpoint_data
-                    )
-                    if cloud_success:
-                        backup_result["cloud_uploads"] += 1
-                    
-                    # Always backup locally as fallback
+                    # Only backup locally (filesystem copies for redundancy)
                     local_success = self._backup_checkpoint_locally(
                         session_id, stage, checkpoint_data
                     )
                     if local_success:
                         backup_result["local_backups"] += 1
-                    
-                    if not (cloud_success or local_success):
-                        backup_result["failed"] += 1
+                    else:
+                        backup_result["skipped"] += 1
                 
                 except Exception as e:
                     logger.warning(f"Checkpoint backup error for {checkpoint_file}: {e}")
-                    backup_result["failed"] += 1
+                    backup_result["skipped"] += 1
             
             self.last_backup_time = datetime.now(timezone.utc)
             self.backup_history.append(backup_result)
@@ -216,12 +211,63 @@ class ContinuousBackupManager:
     
     def force_backup_now(self) -> bool:
         """
-        Force an immediate backup (useful before critical operations).
+        Force an immediate backup INCLUDING cloud upload (for completion pages).
+        
+        This is called before critical operations (page completion) and
+        will upload to cloud if available.
         
         Returns: True if successful
         """
-        logger.info("⚡ Forcing immediate backup...")
-        return self.backup_once()
+        logger.info("⚡ Forcing immediate backup with cloud sync...")
+        try:
+            if not self.checkpoint_dir.exists():
+                return False
+            
+            session_info = self.session_manager.get_session_info()
+            session_id = session_info.get("session_id")
+            
+            checkpoint_files = list(self.checkpoint_dir.glob("*_checkpoint.json"))
+            if not checkpoint_files:
+                return False
+            
+            cloud_uploaded = 0
+            local_backed = 0
+            
+            for checkpoint_file in checkpoint_files:
+                try:
+                    with open(checkpoint_file, "r", encoding="utf-8") as f:
+                        checkpoint_data = json.load(f)
+                    
+                    stage = checkpoint_data.get("stage", "unknown")
+                    
+                    # Try cloud upload (forced operation)
+                    if self.supabase:
+                        cloud_ok = self._upload_checkpoint_to_cloud(
+                            session_id, stage, checkpoint_data
+                        )
+                        if cloud_ok:
+                            cloud_uploaded += 1
+                            logger.info(f"✅ Cloud backup: {stage}")
+                    
+                    # Also backup locally
+                    local_ok = self._backup_checkpoint_locally(
+                        session_id, stage, checkpoint_data
+                    )
+                    if local_ok:
+                        local_backed += 1
+                
+                except Exception as e:
+                    logger.warning(f"Force backup error for {checkpoint_file}: {e}")
+            
+            if cloud_uploaded or local_backed:
+                logger.info(f"✓ Force backup complete: {cloud_uploaded} cloud + {local_backed} local")
+                return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Force backup failed: {e}")
+            return False
     
     def get_backup_status(self) -> Dict[str, Any]:
         """Get current backup status and history."""
