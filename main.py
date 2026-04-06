@@ -216,17 +216,6 @@ def qa_event(event: str, **fields) -> None:
         logger.debug("qa_event_failed: %s", exc)
 
 
-def _trim_chat_history() -> None:
-    """Keep only the latest chat turns to avoid unbounded memory growth."""
-    max_pairs = max(1, int(os.getenv("CHAT_HISTORY_MAX_PAIRS", "20")))
-    max_messages = max_pairs * 2
-    messages = st.session_state.get("messages", [])
-    if len(messages) > max_messages:
-        removed = len(messages) - max_messages
-        st.session_state["messages"] = messages[-max_messages:]
-        qa_event("chat_history_trimmed", removed=removed, kept=max_messages)
-
-
 def _load_model_slide_image(slide_path: Path) -> tuple[Image.Image, tuple[int, int], tuple[int, int]]:
     """Load one slide image for model use at full original resolution."""
     with Image.open(slide_path) as src:
@@ -1386,7 +1375,6 @@ elif st.session_state.current_page == "learning":
                         {"role": "assistant", "content": reply_text},
                     ]
                 )
-                _trim_chat_history()
                 qa_event(
                     "chat_reply",
                     retries=retry_count,
@@ -1581,7 +1569,6 @@ elif st.session_state.current_page == "learning":
                                 {"role": "assistant", "content": reply_text},
                             ]
                         )
-                        _trim_chat_history()
                         qa_event(
                             "explain_slide_done",
                             slide=selected_slide,
