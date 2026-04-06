@@ -288,6 +288,20 @@ if "language_code" not in st.session_state:
                             if "language_code" not in st.session_state:
                                 st.session_state["language_code"] = recovered_session.get("language_code", "en")
                             
+                            # IMPORTANT: Override session manager to use RECOVERED session directory
+                            # (not create a new one)
+                            sm.session_dir = str(session_dir_to_load)
+                            sm.session_id = recovered_session.get("session_id")
+                            
+                            # Restore subdirectories
+                            sm.profile_dir = str(session_dir_to_load / "profile")
+                            sm.knowledge_test_dir = str(session_dir_to_load / "knowledge_test")
+                            sm.learning_logs_dir = str(session_dir_to_load / "learning_logs")
+                            sm.ueq_dir = str(session_dir_to_load / "ueq")
+                            sm.analytics_dir = str(session_dir_to_load / "analytics")
+                            
+                            logger.info(f"✓ Switched to recovered session: {sm.session_id}")
+                            
                             # Define page callbacks for restoration
                             page_callbacks = {
                                 "profile": lambda data: st.session_state.update({
@@ -321,10 +335,13 @@ if "language_code" not in st.session_state:
                                 {"restored_stages": list(restored.keys())}
                             )
                             
-                            # Update session to use recovered session directory
+                            # Mark session as recovered for tracking
                             st.session_state["_recovered_session_dir"] = str(session_dir_to_load)
+                            st.session_state["_is_recovered_session"] = True
+                            
                             if DEBUG_MODE:
                                 print(f"✓ Session recovered - using directory: {session_dir_to_load}")
+                                print(f"✓ Next page set to: {st.session_state.get('current_page')}")
             except Exception as e:
                 if DEBUG_MODE:
                     print(f"⚠️ Recovery detection failed: {e}")

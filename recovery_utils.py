@@ -83,6 +83,8 @@ def apply_recovered_data(
     
     try:
         stages = recovered_data.get("stages", {})
+        stage_order = ["profile", "learning", "knowledge_test", "ueq"]
+        last_completed_stage = None
         
         for stage, data in stages.items():
             try:
@@ -91,6 +93,7 @@ def apply_recovered_data(
                     page_callbacks[stage](data)
                     restored[stage] = True
                     st.session_state[f"{stage}_completed"] = True
+                    last_completed_stage = stage
                     logger.info(f"✓ Restored {stage}")
                 else:
                     logger.warning(f"No callback for stage {stage}")
@@ -102,6 +105,24 @@ def apply_recovered_data(
         # Update session state
         st.session_state["_recovery_applied"] = True
         st.session_state["_recovery_timestamp"] = datetime.now(timezone.utc).isoformat()
+        
+        # Jump to the NEXT page after last completed stage
+        # (so user continues from where they left off, not from home)
+        if last_completed_stage:
+            try:
+                stage_idx = stage_order.index(last_completed_stage)
+                next_stage_idx = stage_idx + 1
+                
+                if next_stage_idx < len(stage_order):
+                    next_page = stage_order[next_stage_idx]
+                    st.session_state["current_page"] = next_page
+                    logger.info(f"✓ Jumping to next page: {next_page}")
+                else:
+                    # All stages completed, jump to results
+                    st.session_state["current_page"] = "results"
+                    logger.info("✓ All stages recovered, showing results")
+            except Exception as e:
+                logger.warning(f"Failed to determine next page: {e}")
         
         return restored
         
