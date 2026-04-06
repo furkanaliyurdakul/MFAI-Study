@@ -107,6 +107,12 @@ class ResourceProfiler:
         self.interval_sec = max(1, _safe_int("RESOURCE_PROFILING_INTERVAL_SEC", 20))
         self.top_n = max(1, _safe_int("RESOURCE_PROFILING_TOP_N", 12))
         self.object_sample_limit = max(1000, _safe_int("RESOURCE_OBJECT_SAMPLE_LIMIT", 40000))
+        self.expensive_every = max(1, _safe_int("RESOURCE_EXPENSIVE_EVERY", 6))
+        self.include_threads = _env_bool("RESOURCE_INCLUDE_THREADS", True)
+        self.include_gc = _env_bool("RESOURCE_INCLUDE_GC", False)
+        self.include_tracemalloc = _env_bool("RESOURCE_INCLUDE_TRACEMALLOC", False)
+        self.include_tracemalloc_growth = _env_bool("RESOURCE_INCLUDE_TRACEMALLOC_GROWTH", True)
+        self.min_growth_mb = _safe_float("RESOURCE_MIN_GROWTH_MB", 1.0)
 
         self.stress_mode = os.getenv("RESOURCE_STRESS_MODE", "off").strip().lower()
         if self.stress_mode not in {"off", "memory", "cpu", "both"}:
@@ -125,7 +131,12 @@ class ResourceProfiler:
 
         self._last_emit = 0.0
         self._last_stress_emit = 0.0
+        self._snapshot_count = 0
         self._snapshot_sink = None
+        self._prev_tm_snapshot = None
+        self._prev_rss = None
+        self._prev_ts = None
+        self._last_session_state_sizes: dict[str, int] = {}
 
     def start(self) -> None:
         if psutil is None:
@@ -193,6 +204,9 @@ class ResourceProfiler:
         print(
             "[RESOURCE] config "
             f"interval_sec={self.interval_sec} top_n={self.top_n} "
+            f"expensive_every={self.expensive_every} include_threads={self.include_threads} "
+            f"include_gc={self.include_gc} include_tracemalloc={self.include_tracemalloc} "
+            f"include_tracemalloc_growth={self.include_tracemalloc_growth} min_growth_mb={self.min_growth_mb:.2f} "
             f"stress_mode={self.stress_mode} stress_mb_per_sec={self.stress_mb_per_sec} "
             f"stress_max_mb={self.stress_max_mb} stress_cpu_workers={self.stress_cpu_workers}"
         )
@@ -200,6 +214,8 @@ class ResourceProfiler:
     def _emit_snapshot(self, tag: str) -> None:
         if self._proc is None:
             return
+        self._snapshot_count += 1
+        expensive_tick = (self._snapshot_count % self.expensive_every) == 0
         ts = datetime.now(timezone.utc).isoformat()
 
         with self._proc.oneshot():
@@ -232,6 +248,20 @@ class ResourceProfiler:
             f"cpu_percent={cpu_percent:.2f} rss={_format_bytes(rss)} vms={_format_bytes(vms)} "
             f"uss={_format_bytes(uss)} pss={_format_bytes(pss)} threads={thr_count}"
         )
+
+        # Memory trend line (the most useful signal for leaks)
+        rss_delta = 0
+        seconds_delta = 0.0
+        rss_rate_per_min = 0.0
+        if self._prev_rss is not None and self._prev_ts is not None:
+            rss_delta = rss - self._prev_rss
+            seconds_delta = max(0.001, time.time() - self._prev_ts)
+            rss_rate_per_min = (rss_delta / seconds_delta) * 60.0
+        print(
+            "[RESOURCE] memory_trend "
+            f"rss_delta={_format_bytes(rss_delta)} over_sec={seconds_delta:.1f} "
+            f"rss_rate_per_min={_format_bytes(int(rss_rate_per_min))}"
+        )
         print(
             "[RESOURCE] cpu_times "
             f"user={cpu_times.user:.2f}s system={cpu_times.system:.2f}s"
@@ -245,8 +275,9 @@ class ResourceProfiler:
             )
 
         print(f"[RESOURCE] open_files count={len(open_files)}")
-        for f in open_files[: self.top_n]:
-            print(f"[RESOURCE] open_file path={f.path}")
+        if expensive_tick:
+            for f in open_files[: self.top_n]:
+                print(f"[RESOURCE] open_file path={f.path}")
 
         child_mem = 0
         child_cpu = 0.0
@@ -261,9 +292,14 @@ class ResourceProfiler:
             f"count={len(children)} total_rss={_format_bytes(child_mem)} total_cpu_percent={child_cpu:.2f}"
         )
 
-        self._emit_thread_cpu()
-        self._emit_gc_type_breakdown()
-        self._emit_tracemalloc_breakdown()
+        if self.include_threads and expensive_tick:
+            self._emit_thread_cpu()
+        if self.include_gc and expensive_tick:
+            self._emit_gc_type_breakdown()
+        if self.include_tracemalloc and expensive_tick:
+            self._emit_tracemalloc_breakdown()
+        if self.include_tracemalloc_growth and expensive_tick:
+            self._emit_tracemalloc_growth()
 
         if self.stress_mode in {"memory", "both"}:
             total_stress_mb = sum(len(x) for x in self._mem_chunks) / (1024 * 1024)
@@ -276,6 +312,8 @@ class ResourceProfiler:
             "pid": self._proc.pid,
             "cpu_percent": cpu_percent,
             "rss_bytes": rss,
+            "rss_delta_bytes": rss_delta,
+            "rss_rate_per_min_bytes": int(rss_rate_per_min),
             "vms_bytes": vms,
             "uss_bytes": uss,
             "pss_bytes": pss,
@@ -297,6 +335,9 @@ class ResourceProfiler:
             "stress_allocated_mb": (sum(len(x) for x in self._mem_chunks) / (1024 * 1024)) if self.stress_mode in {"memory", "both"} else 0,
         }
         self._push_snapshot(snapshot_payload)
+
+        self._prev_rss = rss
+        self._prev_ts = time.time()
 
     def _emit_thread_cpu(self) -> None:
         try:
@@ -361,6 +402,41 @@ class ResourceProfiler:
         except Exception as exc:
             print(f"[RESOURCE] tracemalloc_failed error={type(exc).__name__}: {exc}")
 
+    def _emit_tracemalloc_growth(self) -> None:
+        if not tracemalloc.is_tracing():
+            return
+        try:
+            current = tracemalloc.take_snapshot()
+            if self._prev_tm_snapshot is None:
+                self._prev_tm_snapshot = current
+                print("[RESOURCE] tm_growth baseline_initialized=true")
+                return
+
+            growth_stats = current.compare_to(self._prev_tm_snapshot, "filename")
+            self._prev_tm_snapshot = current
+
+            min_growth_bytes = int(self.min_growth_mb * 1024 * 1024)
+            positive = [s for s in growth_stats if s.size_diff > 0]
+
+            print(f"[RESOURCE] tm_growth candidates={len(positive)} min_growth={_format_bytes(min_growth_bytes)}")
+            shown = 0
+            for stat in positive:
+                if stat.size_diff < min_growth_bytes:
+                    continue
+                shown += 1
+                print(
+                    "[RESOURCE] tm_growth_file "
+                    f"file={stat.traceback[0].filename} growth={_format_bytes(stat.size_diff)} "
+                    f"count_diff={stat.count_diff}"
+                )
+                if shown >= self.top_n:
+                    break
+
+            if shown == 0:
+                print("[RESOURCE] tm_growth_file none_above_threshold=true")
+        except Exception as exc:
+            print(f"[RESOURCE] tm_growth_failed error={type(exc).__name__}: {exc}")
+
     def emit_session_state_breakdown(self, session_state: Any) -> None:
         if not self.enabled:
             return
@@ -378,11 +454,39 @@ class ResourceProfiler:
             for key, size, tname in rows[: self.top_n]:
                 print(f"[RESOURCE] session_state key={key} type={tname} approx_size={_format_bytes(size)}")
 
+            # Growth-focused view: what session_state keys increased since last report
+            growth_rows = []
+            current_sizes = {key: size for key, size, _ in rows}
+            for key, size in current_sizes.items():
+                prev = self._last_session_state_sizes.get(key, 0)
+                diff = size - prev
+                if diff > 0:
+                    growth_rows.append((key, diff))
+            growth_rows.sort(key=lambda x: x[1], reverse=True)
+
+            min_growth_bytes = int(self.min_growth_mb * 1024 * 1024)
+            printed_growth = 0
+            for key, diff in growth_rows:
+                if diff < min_growth_bytes:
+                    continue
+                printed_growth += 1
+                print(f"[RESOURCE] session_state_growth key={key} delta={_format_bytes(diff)}")
+                if printed_growth >= self.top_n:
+                    break
+            if printed_growth == 0:
+                print("[RESOURCE] session_state_growth none_above_threshold=true")
+
+            self._last_session_state_sizes = current_sizes
+
             self._push_snapshot(
                 {
                     "event_type": "session_state",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "keys_count": len(rows),
+                    "growing_keys": [
+                        {"key": key, "delta_bytes": diff}
+                        for key, diff in growth_rows[: self.top_n]
+                    ],
                     "top_keys": [
                         {"key": key, "type": tname, "approx_size_bytes": size}
                         for key, size, tname in rows[: self.top_n]

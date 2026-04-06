@@ -235,6 +235,13 @@ def _apply_resource_profiler_defaults_from_secrets() -> None:
         "interval_sec": "RESOURCE_PROFILING_INTERVAL_SEC",
         "top_n": "RESOURCE_PROFILING_TOP_N",
         "session_state": "RESOURCE_SESSION_STATE",
+        "session_state_interval_sec": "RESOURCE_SESSION_STATE_INTERVAL_SEC",
+        "expensive_every": "RESOURCE_EXPENSIVE_EVERY",
+        "include_threads": "RESOURCE_INCLUDE_THREADS",
+        "include_gc": "RESOURCE_INCLUDE_GC",
+        "include_tracemalloc": "RESOURCE_INCLUDE_TRACEMALLOC",
+        "include_tracemalloc_growth": "RESOURCE_INCLUDE_TRACEMALLOC_GROWTH",
+        "min_growth_mb": "RESOURCE_MIN_GROWTH_MB",
         "stress_mode": "RESOURCE_STRESS_MODE",
         "stress_mb_per_sec": "RESOURCE_STRESS_MB_PER_SEC",
         "stress_max_mb": "RESOURCE_STRESS_MAX_MB",
@@ -259,7 +266,12 @@ if get_resource_profiler is not None:
         st.session_state["_resource_profiler_started"] = True
 
     if resource_profiler.enabled and os.getenv("RESOURCE_SESSION_STATE", "1").strip().lower() in {"1", "true", "yes", "on"}:
-        resource_profiler.emit_session_state_breakdown(st.session_state)
+        session_state_interval = int(os.getenv("RESOURCE_SESSION_STATE_INTERVAL_SEC", "120"))
+        now_ts = time.time()
+        last_emit = float(st.session_state.get("_resource_session_state_last_emit", 0.0))
+        if (now_ts - last_emit) >= max(5, session_state_interval):
+            resource_profiler.emit_session_state_breakdown(st.session_state)
+            st.session_state["_resource_session_state_last_emit"] = now_ts
 
 if "_page_timer" not in st.session_state:
     from page_timer import start as page_timer_start
