@@ -15,8 +15,18 @@ from typing import Dict, List
 # Set to False in production to disable all debug print statements
 DEBUG_MODE = False  # Toggle this to enable/disable debug logging
 
-# Dev mode: Disables recovery prompts for faster local testing
-DEV_MODE = False  # Set to True for local testing without recovery UI
+# ═══════════════════════════════════════════════════════════════════
+# DATA LOSS PREVENTION & STORAGE SETTINGS
+# ═══════════════════════════════════════════════════════════════════
+# Checkpoint storage strategy for limited resources
+CHECKPOINT_UPLOAD_THEN_DELETE = False  # If True: Upload to cloud then delete local copy (saves server disk)
+                                        # If False: Keep both local + cloud (safest)
+
+# Checkpoint upload frequency (seconds)
+CHECKPOINT_BACKUP_INTERVAL = 300  # 5 minutes
+
+# Maximum age of checkpoint files to keep locally (hours)
+CHECKPOINT_RETENTION_HOURS = 24  # Auto-cleanup older than 24 hours
 
 
 # ═══════════════════════════════════════════════════════════════════

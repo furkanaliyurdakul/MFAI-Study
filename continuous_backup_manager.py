@@ -7,6 +7,7 @@ Strategy:
 2. Uploads all checkpoints to Supabase
 3. Keeps running even if main app has issues
 4. Falls back to local save if cloud unavailable
+5. Optional: Delete local after successful cloud upload (for storage savings)
 """
 
 import json
@@ -232,6 +233,7 @@ class ContinuousBackupManager:
             
             cloud_uploaded = 0
             local_backed = 0
+            files_deleted = 0
             
             for checkpoint_file in checkpoint_files:
                 try:
@@ -241,6 +243,7 @@ class ContinuousBackupManager:
                     stage = checkpoint_data.get("stage", "unknown")
                     
                     # Try cloud upload (forced operation)
+                    cloud_ok = False
                     if self.supabase:
                         cloud_ok = self._upload_checkpoint_to_cloud(
                             session_id, stage, checkpoint_data
@@ -255,18 +258,53 @@ class ContinuousBackupManager:
                     )
                     if local_ok:
                         local_backed += 1
+                    
+                    # Optional: Delete local file after successful cloud upload
+                    # (saves server disk space for limited resources)
+                    if cloud_ok and self._should_delete_after_upload():
+                        if self._safe_delete_checkpoint(checkpoint_file):
+                            files_deleted += 1
+                            logger.info(f"🗑️ Deleted local: {stage} (after cloud sync)")
                 
                 except Exception as e:
                     logger.warning(f"Force backup error for {checkpoint_file}: {e}")
             
             if cloud_uploaded or local_backed:
-                logger.info(f"✓ Force backup complete: {cloud_uploaded} cloud + {local_backed} local")
+                status = f"✓ Force backup complete: {cloud_uploaded} cloud + {local_backed} local"
+                if files_deleted:
+                    status += f" ({files_deleted} deleted after sync)"
+                logger.info(status)
                 return True
             
             return False
             
         except Exception as e:
             logger.error(f"Force backup failed: {e}")
+            return False
+    
+    def _should_delete_after_upload(self) -> bool:
+        """Check if we should delete local files after cloud upload."""
+        try:
+            from config import CHECKPOINT_UPLOAD_THEN_DELETE
+            return CHECKPOINT_UPLOAD_THEN_DELETE
+        except ImportError:
+            return False  # Default: keep local copies
+    
+    def _safe_delete_checkpoint(self, checkpoint_file: Path) -> bool:
+        """
+        Safely delete checkpoint file (only if we're sure cloud sync succeeded).
+        
+        Returns: True if deleted, False if file still needed
+        """
+        try:
+            if not checkpoint_file.exists():
+                return False
+            
+            checkpoint_file.unlink()  # Delete file
+            logger.debug(f"Deleted: {checkpoint_file.name}")
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to delete {checkpoint_file}: {e}")
             return False
     
     def get_backup_status(self) -> Dict[str, Any]:
