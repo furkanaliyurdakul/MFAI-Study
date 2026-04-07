@@ -9,9 +9,7 @@ then requests a personalised (or generic) explanation from Gemini 2.5.
 from __future__ import annotations
 
 import json
-import os
 import re
-import time
 from pathlib import Path
 
 # Heavy / Windows‑only libs are *imported* but only initialised when needed

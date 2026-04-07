@@ -10,9 +10,7 @@ Monitors:
 
 import streamlit as st
 from datetime import datetime, timedelta
-from typing import Optional, Tuple, Dict
-import json
-from pathlib import Path
+from typing import Dict
 
 
 class CapacityManager:

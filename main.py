@@ -132,7 +132,7 @@ if DEBUG_MODE:
     print("🔧 DEBUG: About to start imports")
 
 # ── Configuration ──────────────────────────────────────────────
-from config import get_config, get_course_title, get_platform_name, get_ui_text
+from config import get_config
 config = get_config()
 if DEBUG_MODE:
     print("🔧 DEBUG: Config loaded")
@@ -178,12 +178,10 @@ atexit.register(_cleanup_on_exit)
 
 # ── std‑lib ────────────────────────────────────────────
 import os
-import sys
 import time
 import gc
 import logging
 from pathlib import Path
-from typing import Dict, List
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
@@ -261,7 +259,6 @@ from Gemini_UI import (
     TRANSCRIPTION_DIR,
     UPLOAD_DIR_AUDIO,
     UPLOAD_DIR_PPT,
-    UPLOAD_DIR_PROFILE,
     build_prompt,
     create_summary_prompt,
     make_base_context,
@@ -277,9 +274,6 @@ except ImportError:
     UPLOAD_DIR_VIDEO = Path.cwd() / "uploads" / "video"
     UPLOAD_DIR_VIDEO.mkdir(parents=True, exist_ok=True)
 from Gemini_UI import export_ppt_slides as process_ppt_file  # alias → keep old name
-from Gemini_UI import (
-    parse_detailed_student_profile,
-)
 from Gemini_UI import (
     transcribe_audio as transcribe_audio_from_file,  # alias → keep old name
 )
@@ -348,8 +342,6 @@ if get_resource_profiler is not None:
             st.session_state["_resource_session_state_last_emit"] = now_ts
 
 if "_page_timer" not in st.session_state:
-    from page_timer import start as page_timer_start
-    
     page_timer_start("home")
 
 # ── Initialize Data Loss Prevention Managers (BEFORE AUTH LOOP) ────────────

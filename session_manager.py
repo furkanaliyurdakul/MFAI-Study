@@ -2,11 +2,10 @@ import datetime
 import json
 import os
 import random
-import string
 
 import streamlit as st
 
-from constants import KNOWLEDGE_JSON, UEQ_JSON, EXPERIMENT_META, INTERACTION_COUNTS
+from constants import KNOWLEDGE_JSON, UEQ_JSON
 from analytics_syncer import get_analytics_syncer
 
 # List of fake first names and last names for pseudonymization
