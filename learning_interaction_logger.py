@@ -74,6 +74,14 @@ class LearningLogger:
             log_entry["metadata"] = final_meta
         self.log_entries.append(log_entry)
 
+        # Crash-safe persistence: flush each interaction immediately.
+        # save_logs(force=False) writes buffered entries and clears buffer.
+        try:
+            self.save_logs(force=False)
+        except Exception:
+            # Never interrupt participant flow because of logging failures.
+            pass
+
     def save_logs(self, force: bool = False):
         """Write the buffered interactions to disk and clear the buffer.
 

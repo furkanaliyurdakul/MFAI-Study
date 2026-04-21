@@ -50,8 +50,8 @@ class SupabaseStorage:
             # Log connection failure for debugging
             error_msg = f"Supabase initialization failed: {str(e)}"
             logger.error(error_msg)
-            print(f"❌ SUPABASE INIT ERROR: {error_msg}")
-            print(f"📋 Full traceback:")
+            print(f"SUPABASE INIT ERROR: {error_msg}")
+            print("Full traceback:")
             traceback.print_exc()
             # In production, silently fail - uploads will be handled gracefully later
             self.connected = False
@@ -63,24 +63,24 @@ class SupabaseStorage:
             
         try:
             logger.info("Checking if Supabase bucket exists...")
-            print(f"🔍 SUPABASE INIT: Checking bucket '{self.bucket_name}'...")
+            print(f"SUPABASE INIT: Checking bucket '{self.bucket_name}'...")
             
             # Test bucket access
             bucket_list = self.supabase.storage.list_buckets()
             existing = [(b.name if hasattr(b, "name") else b.get("name")) for b in bucket_list]
             logger.info(f"Available buckets: {existing}")
-            print(f"📁 SUPABASE INIT: Available buckets: {existing}")
+            print(f"SUPABASE INIT: Available buckets: {existing}")
             
             bucket_exists = self.bucket_name in existing
             
             if bucket_exists:
                 logger.info(f"Bucket '{self.bucket_name}' already exists")
-                print(f"✅ SUPABASE INIT: Bucket '{self.bucket_name}' ready")
+                print(f"SUPABASE INIT: Bucket '{self.bucket_name}' ready")
                 return True
             
             # Create the bucket
             logger.info(f"Creating bucket '{self.bucket_name}'...")
-            print(f"🔨 SUPABASE INIT: Creating bucket '{self.bucket_name}'...")
+            print(f"SUPABASE INIT: Creating bucket '{self.bucket_name}'...")
             
             try:
                 # New clients usually accept (name, options)
@@ -97,17 +97,17 @@ class SupabaseStorage:
             if err:
                 error_msg = f"Failed to create bucket: {err}"
                 logger.error(error_msg)
-                print(f"❌ SUPABASE INIT: {error_msg}")
+                print(f"SUPABASE INIT ERROR: {error_msg}")
                 return False
             else:
                 logger.info(f"Successfully created bucket '{self.bucket_name}'")
-                print(f"✅ SUPABASE INIT: Successfully created bucket '{self.bucket_name}'")
+                print(f"SUPABASE INIT: Successfully created bucket '{self.bucket_name}'")
                 return True
                 
         except Exception as e:
             error_msg = f"Error ensuring bucket exists: {e}"
             logger.error(error_msg)
-            print(f"❌ SUPABASE INIT: {error_msg}")
+            print(f"SUPABASE INIT ERROR: {error_msg}")
             return False
     
     def test_connection(self) -> bool:
@@ -117,7 +117,7 @@ class SupabaseStorage:
             
         try:
             logger.info("Testing Supabase upload capability...")
-            print("🔌 UPLOAD TEST: Testing upload capability...")
+            print("UPLOAD TEST: Testing upload capability...")
             
             # Test upload
             test_path = f"connection_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
@@ -130,47 +130,47 @@ class SupabaseStorage:
             if hasattr(test_result, 'error') and test_result.error:
                 error_msg = f"Upload test failed: {test_result.error}"
                 logger.error(error_msg)
-                print(f"❌ UPLOAD TEST: {error_msg}")
+                print(f"UPLOAD TEST ERROR: {error_msg}")
                 return False
                 
             # Clean up test file
             self.supabase.storage.from_(self.bucket_name).remove([test_path])
             logger.info("Upload test successful")
-            print("✅ UPLOAD TEST: Upload capability confirmed")
+            print("UPLOAD TEST: Upload capability confirmed")
             return True
             
         except Exception as e:
             error_msg = f"Upload test failed: {e}"
             logger.error(error_msg)
-            print(f"❌ UPLOAD TEST: {error_msg}")
+            print(f"UPLOAD TEST ERROR: {error_msg}")
             return False
     
     def manual_test(self):
         """Manual test function you can call anytime to check Supabase setup."""
         print("\n" + "="*50)
-        print("🧪 MANUAL SUPABASE TEST")
+        print("MANUAL SUPABASE TEST")
         print("="*50)
         
         if not self.connected:
-            print("❌ Not connected to Supabase")
+            print("Not connected to Supabase")
             return False
         
-        print("✅ Connected to Supabase")
+        print("Connected to Supabase")
         
         # Test bucket
         if self.ensure_bucket_exists():
-            print("✅ Bucket ready")
+            print("Bucket ready")
         else:
-            print("❌ Bucket not ready")
+            print("Bucket not ready")
             return False
         
         # Test upload
         if self.test_connection():
-            print("✅ Upload capability confirmed")
-            print("🎉 Supabase is ready for uploads!")
+            print("Upload capability confirmed")
+            print("Supabase is ready for uploads")
             return True
         else:
-            print("❌ Upload test failed")
+            print("Upload test failed")
             return False
     
     def _get_credential_folder_prefix(self) -> str:
@@ -188,29 +188,219 @@ class SupabaseStorage:
         except (ImportError, AttributeError):
             # Fallback for cases where authentication isn't available
             return "legacy_session"
+
+    def _guess_content_type(self, file_path: Path) -> str:
+        """Infer content type from file suffix for storage uploads."""
+        suffix = file_path.suffix.lower()
+        if suffix == ".json":
+            return "application/json"
+        if suffix == ".txt":
+            return "text/plain"
+        if suffix == ".csv":
+            return "text/csv"
+        if suffix == ".png":
+            return "image/png"
+        if suffix in {".jpg", ".jpeg"}:
+            return "image/jpeg"
+        if suffix == ".mp4":
+            return "video/mp4"
+        return "application/octet-stream"
+
+    def _status_file_path(self, session_manager) -> Path | None:
+        """Return per-session durability status file path if session context is available."""
+        try:
+            session_dir = Path(session_manager.session_dir)
+            meta_dir = session_dir / "meta"
+            meta_dir.mkdir(parents=True, exist_ok=True)
+            return meta_dir / "upload_status.json"
+        except Exception:
+            return None
+
+    def _record_upload_status(
+        self,
+        session_manager,
+        status: str,
+        phase: str,
+        detail: str | None = None,
+        uploaded_files: int | None = None,
+        failed_files: int | None = None,
+    ) -> None:
+        """Record durability state locally and best-effort in analytics DB."""
+        session_id = getattr(session_manager, "session_id", None)
+
+        # Local status file (authoritative for runtime diagnostics).
+        status_path = self._status_file_path(session_manager)
+        if status_path is not None:
+            try:
+                payload = {
+                    "session_id": session_id,
+                    "status": status,
+                    "phase": phase,
+                    "detail": detail,
+                    "uploaded_files": uploaded_files,
+                    "failed_files": failed_files,
+                    "updated_at": datetime.now().isoformat(),
+                }
+                history = []
+                if status_path.exists():
+                    try:
+                        existing = json.loads(status_path.read_text(encoding="utf-8"))
+                        if isinstance(existing, dict) and isinstance(existing.get("history"), list):
+                            history = existing["history"]
+                    except Exception:
+                        history = []
+                history.append(payload)
+                payload["history"] = history[-50:]
+                status_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+            except Exception as e:
+                logger.warning(f"Could not write upload status file: {e}")
+
+        # Optional DB sink; safe if table is absent.
+        if session_id:
+            try:
+                from analytics_syncer import get_analytics_syncer
+
+                analytics = get_analytics_syncer()
+                if analytics:
+                    analytics.record_upload_status(
+                        session_id=session_id,
+                        status=status,
+                        phase=phase,
+                        detail=detail,
+                        uploaded_files=uploaded_files,
+                        failed_files=failed_files,
+                    )
+            except Exception:
+                pass
+
+    def upload_single_file(self, session_manager, file_path: Path) -> bool:
+        """Upload one session file immediately for crash-safe incremental persistence.
+
+        Returns True on success, False otherwise.
+        """
+        if not self.connected:
+            self._record_upload_status(
+                session_manager,
+                status="failed",
+                phase="incremental",
+                detail="supabase_not_connected",
+            )
+            return False
+
+        try:
+            session_dir = Path(session_manager.session_dir)
+            file_path = Path(file_path)
+
+            if not file_path.exists() or not file_path.is_file():
+                return False
+
+            try:
+                relative_path = file_path.relative_to(session_dir)
+            except ValueError:
+                # Only upload files that belong to the active session tree.
+                return False
+
+            # Never upload sensitive profile originals.
+            if file_path.name in {"original_profile.json", "original_profile.txt"}:
+                return True
+
+            file_size = file_path.stat().st_size
+            if file_size > 50 * 1024 * 1024:
+                logger.warning(f"Skipping oversized file upload: {file_path} ({file_size} bytes)")
+                return False
+
+            folder_prefix = getattr(session_manager, "folder_prefix", None) or self._get_credential_folder_prefix()
+            session_id = getattr(session_manager, "session_id", None)
+            if not session_id:
+                return False
+
+            supabase_path = f"{folder_prefix}/sessions/{session_id}/{relative_path}".replace("\\", "/")
+            content_type = self._guess_content_type(file_path)
+            file_data = file_path.read_bytes()
+
+            result = self.supabase.storage.from_(self.bucket_name).upload(
+                path=supabase_path,
+                file=file_data,
+                file_options={"content-type": content_type},
+            )
+
+            err = _extract_error(result)
+            if err and "already exists" in str(err).lower():
+                result = self.supabase.storage.from_(self.bucket_name).update(
+                    path=supabase_path,
+                    file=file_data,
+                    file_options={"content-type": content_type},
+                )
+                err = _extract_error(result)
+
+            if err:
+                logger.warning(f"Incremental upload failed for {supabase_path}: {err}")
+                self._record_upload_status(
+                    session_manager,
+                    status="failed",
+                    phase="incremental",
+                    detail=str(err),
+                    uploaded_files=0,
+                    failed_files=1,
+                )
+                return False
+
+            self._record_upload_status(
+                session_manager,
+                status="ok",
+                phase="incremental",
+                detail=str(relative_path),
+                uploaded_files=1,
+                failed_files=0,
+            )
+            return True
+
+        except Exception as e:
+            logger.warning(f"Incremental upload exception for {file_path}: {e}")
+            self._record_upload_status(
+                session_manager,
+                status="failed",
+                phase="incremental",
+                detail=f"exception: {e}",
+                uploaded_files=0,
+                failed_files=1,
+            )
+            return False
     
     def upload_session_files(self, session_manager, dev_mode: bool = False) -> bool:
         """Upload all local session files to Supabase Storage, maintaining original structure."""
         print(f"\n{'='*60}")
-        print(f"🚀 UPLOAD START: upload_session_files() called at {datetime.now()}")
+        print(f"UPLOAD START: upload_session_files() called at {datetime.now()}")
         print(f"{'='*60}")
         
         if not self.connected:
             error_msg = "Supabase not connected - cannot save data"
             logger.error(error_msg)
-            print(f"❌ UPLOAD BLOCKED: {error_msg}")
-            print(f"💡 Check Streamlit console for Supabase initialization errors above")
+            print(f"UPLOAD BLOCKED: {error_msg}")
+            print("Check Streamlit console for Supabase initialization errors above")
+            self._record_upload_status(
+                session_manager,
+                status="failed",
+                phase="final",
+                detail=error_msg,
+            )
             # Don't show technical errors to participants
             return False
             
         try:
             # Quick upload capability test
             logger.info("Starting Supabase upload process...")
-            print(f"🔄 UPLOAD DEBUG: Starting Supabase upload process at {datetime.now()}")
+            print(f"UPLOAD DEBUG: Starting Supabase upload process at {datetime.now()}")
             
             if not self.test_connection():
                 error_msg = "Supabase upload test failed - uploads will not work"
                 logger.error(error_msg)
+                self._record_upload_status(
+                    session_manager,
+                    status="failed",
+                    phase="final",
+                    detail=error_msg,
+                )
                 # Don't show technical errors to participants
                 return False
             
@@ -224,13 +414,19 @@ class SupabaseStorage:
             logger.info(f"Session ID: {session_id}")
             logger.info(f"Session directory: {session_dir}")
             logger.info(f"Credential folder prefix: {folder_prefix}")
-            print(f"📁 UPLOAD DEBUG: Session ID = {session_id}")
-            print(f"📁 UPLOAD DEBUG: Session directory = {session_dir}")
-            print(f"🏷️ UPLOAD DEBUG: Credential folder = {folder_prefix}")
+            print(f"UPLOAD DEBUG: Session ID = {session_id}")
+            print(f"UPLOAD DEBUG: Session directory = {session_dir}")
+            print(f"UPLOAD DEBUG: Credential folder = {folder_prefix}")
             
             if not session_dir.exists():
                 error_msg = f"Session directory not found: {session_dir}"
                 logger.error(error_msg)
+                self._record_upload_status(
+                    session_manager,
+                    status="failed",
+                    phase="final",
+                    detail=error_msg,
+                )
                 # Don't show technical errors to participants
                 return False
             
@@ -246,7 +442,7 @@ class SupabaseStorage:
                 timestamp = datetime.now().strftime("%H:%M:%S")
                 full_message = f"[{timestamp}] {message}"
                 logger.info(message)
-                print(f"📤 UPLOAD DEBUG: {full_message}")
+                print(f"UPLOAD DEBUG: {full_message}")
                 with open(log_file, "a", encoding="utf-8") as f:
                     f.write(full_message + "\n")
             
@@ -266,7 +462,7 @@ class SupabaseStorage:
                     # Skip sensitive files
                     SENSITIVE = {"original_profile.json", "original_profile.txt"}
                     if file_path.name in SENSITIVE:
-                        log_to_file_and_console(f"⛔ Skipped sensitive file: {relative_path}")
+                        log_to_file_and_console(f"SKIPPED sensitive file: {relative_path}")
                         continue
                     
                     # Create credential-organized Supabase path: {credential_folder}/sessions/{session_id}/{relative_path}
@@ -283,7 +479,7 @@ class SupabaseStorage:
                     if file_size > 50 * 1024 * 1024:  # 50MB limit
                         error_msg = f"{relative_path}: File too large ({file_size} bytes > 50MB)"
                         failed_uploads.append(error_msg)
-                        log_to_file_and_console(f"❌ FAILED: {error_msg}")
+                        log_to_file_and_console(f"FAILED: {error_msg}")
                         continue
                     
                     # Read file content
@@ -323,68 +519,78 @@ class SupabaseStorage:
                             if err:
                                 error_msg = f"{relative_path}: {str(err)}"
                                 failed_uploads.append(error_msg)
-                                log_to_file_and_console(f"❌ FAILED: {error_msg}")
+                                log_to_file_and_console(f"FAILED: {error_msg}")
                             else:
                                 uploaded_files.append(str(relative_path))
-                                log_to_file_and_console(f"✅ SUCCESS: {relative_path}")
+                                log_to_file_and_console(f"SUCCESS: {relative_path}")
                                 
                         except Exception as upload_e:
                             error_msg = f"{relative_path}: Upload exception - {str(upload_e)}"
                             failed_uploads.append(error_msg)
-                            log_to_file_and_console(f"❌ EXCEPTION: {error_msg}")
+                            log_to_file_and_console(f"EXCEPTION: {error_msg}")
                             
                     except Exception as file_e:
                         error_msg = f"{relative_path}: File read error - {str(file_e)}"
                         failed_uploads.append(error_msg)
-                        log_to_file_and_console(f"❌ FILE ERROR: {error_msg}")
+                        log_to_file_and_console(f"FILE ERROR: {error_msg}")
             
             # Report results
             log_to_file_and_console(f"Upload complete: {len(uploaded_files)} success, {len(failed_uploads)} failed")
             
             # Print summary to console for easy access
             print(f"\n{'='*60}")
-            print(f"🎯 UPLOAD SUMMARY FOR SESSION {session_id}")
+            print(f"UPLOAD SUMMARY FOR SESSION {session_id}")
             print(f"{'='*60}")
-            print(f"✅ Successful uploads: {len(uploaded_files)}")
-            print(f"❌ Failed uploads: {len(failed_uploads)}")
-            print(f"📁 Log file: {log_file}")
+            print(f"Successful uploads: {len(uploaded_files)}")
+            print(f"Failed uploads: {len(failed_uploads)}")
+            print(f"Log file: {log_file}")
             print(f"{'='*60}")
             
             if failed_uploads:
-                print(f"\n❌ FAILED UPLOADS:")
+                print("\nFAILED UPLOADS:")
                 for i, failure in enumerate(failed_uploads, 1):
                     print(f"  {i}. {failure}")
                 print(f"{'='*60}\n")
             
             # Show technical details only in dev mode
             if dev_mode:
-                st.info(f"📊 Processing complete: {len(uploaded_files)} uploaded, {len(failed_uploads)} failed")
-                st.info(f"📋 Detailed upload log saved to: `{log_file.name}`")
+                st.info(f"Processing complete: {len(uploaded_files)} uploaded, {len(failed_uploads)} failed")
+                st.info(f"Detailed upload log saved to: {log_file.name}")
                 
                 if debug_info:
-                    with st.expander(f"🔍 Debug: File processing details ({len(debug_info)} files)"):
+                    with st.expander(f"Debug: File processing details ({len(debug_info)} files)"):
                         for info in debug_info:
                             st.text(info)
             
             if uploaded_files:
                 if dev_mode:
-                    st.success(f"🎉 Successfully uploaded {len(uploaded_files)} files to cloud storage!")
-                    st.success("✅ All session data has been preserved for research analysis.")
+                    st.success(f"Successfully uploaded {len(uploaded_files)} files to cloud storage")
+                    st.success("All session data has been preserved for research analysis")
                     st.info(f"Session ID: {session_id}")
                 
                 # Show uploaded files in expander (only in dev mode)
-                    with st.expander(f"📁 View uploaded files ({len(uploaded_files)} files)"):
+                    with st.expander(f"View uploaded files ({len(uploaded_files)} files)"):
                         for file_name in sorted(uploaded_files):
-                            st.text(f"✅ {file_name}")
+                            st.text(f"OK {file_name}")
             
             if failed_uploads:
                 if dev_mode:
-                    st.error(f"⚠️ {len(failed_uploads)} files failed to upload:")
-                    with st.expander("❌ View failed uploads (click to expand)"):
+                    st.error(f"{len(failed_uploads)} files failed to upload:")
+                    with st.expander("View failed uploads (click to expand)"):
                         for failure in failed_uploads:
-                            st.text(f"❌ {failure}")
+                            st.text(f"ERROR {failure}")
                 else:
-                    st.warning("⚠️ Some files experienced upload issues, but your data is secure.")
+                    st.warning("Some files experienced upload issues, but your data is secure")
+
+            final_status = "ok" if not failed_uploads else "partial_failed"
+            self._record_upload_status(
+                session_manager,
+                status=final_status,
+                phase="final",
+                detail=f"uploaded={len(uploaded_files)} failed={len(failed_uploads)}",
+                uploaded_files=len(uploaded_files),
+                failed_files=len(failed_uploads),
+            )
             
             return len(uploaded_files) > 0
                 
@@ -392,6 +598,12 @@ class SupabaseStorage:
             # Log technical errors but don't show to participants
             logger.error(f"Error uploading session files to Supabase: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
+            self._record_upload_status(
+                session_manager,
+                status="failed",
+                phase="final",
+                detail=f"exception: {e}",
+            )
             if dev_mode:
                 st.error(f"Error uploading session files to Supabase: {e}")
                 st.error(f"Traceback: {traceback.format_exc()}")

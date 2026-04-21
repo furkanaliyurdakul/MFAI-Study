@@ -1148,15 +1148,13 @@ elif st.session_state.current_page == "learning":
         if DEV_MODE:
             if DEBUG_MODE:
                 print("🔧 DEBUG: Starting dev mode interaction tracking")
-            # Live interaction tracking for development - TEMPORARILY DISABLED FOR DEBUGGING
             try:
                 if DEBUG_MODE:
                     print("🔧 DEBUG: About to call get_interaction_counts()")
-                # TEMPORARILY COMMENTED OUT TO TEST IF THIS IS THE HANG POINT
-                # interaction_counts = get_learning_logger().get_interaction_counts()
-                interaction_counts = {"slide_explanations": 0, "manual_chat": 0, "total_user_interactions": 0}
+                # Dev-only live interaction counters for facilitator verification.
+                interaction_counts = get_learning_logger().get_interaction_counts()
                 if DEBUG_MODE:
-                    print("🔧 DEBUG: get_interaction_counts() completed successfully (using mock data)")
+                    print("🔧 DEBUG: get_interaction_counts() completed successfully")
                 
                 st.sidebar.info(
                     f"{len(get_learning_logger().log_entries) if hasattr(get_learning_logger(), 'log_entries') else 0} interactions buffered"

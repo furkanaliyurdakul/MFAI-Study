@@ -1,4 +1,4 @@
-"""
+﻿"""
 Analytics data sync module.
 
 Automatically syncs session data to Supabase analytics tables
@@ -342,6 +342,36 @@ class AnalyticsSyncer:
             
         except Exception as e:
             logger.error(f"Failed to mark session completed: {e}")
+            return False
+
+    def record_upload_status(
+        self,
+        session_id: str,
+        status: str,
+        phase: str,
+        detail: str | None = None,
+        uploaded_files: int | None = None,
+        failed_files: int | None = None,
+    ) -> bool:
+        """Best-effort durability status event sink.
+
+        Writes to optional table `storage_upload_status`. If the table does not
+        exist yet, this method returns False but does not raise.
+        """
+        try:
+            payload = {
+                "session_id": session_id,
+                "status": status,
+                "phase": phase,
+                "detail": detail,
+                "uploaded_files": uploaded_files,
+                "failed_files": failed_files,
+                "recorded_at": datetime.now(timezone.utc).isoformat(),
+            }
+            self.supabase.table("storage_upload_status").insert(payload).execute()
+            return True
+        except Exception as e:
+            logger.warning(f"Upload status event not persisted for {session_id}: {e}")
             return False
 
 

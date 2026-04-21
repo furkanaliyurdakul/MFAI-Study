@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import random
+from pathlib import Path
 
 import streamlit as st
 
@@ -166,50 +167,34 @@ class SessionManager:
         return f"{first_name}_{last_name}"
 
     def save_profile(self, profile_data: dict, original_name: str | None = None) -> str:
-        """Save only pseudonymized profile (no PII stored).
-
-        Args:
-            profile_data (dict): The profile data to save
-            original_name (str | None): Original name (ignored, for backwards compatibility)
-
-        Returns:
-            str: Path to the saved profile file
-        """
+        """Save only pseudonymized profile (no PII stored)."""
         pseudo = dict(profile_data)
-        # Overwrite any name with a pseudonym derived from session id
         pseudo["name"] = f"Participant_{self.session_id[-6:]}"
         os.makedirs(self.profile_dir, exist_ok=True)
         out = os.path.join(self.profile_dir, "pseudonymized_profile.json")
         with open(out, "w", encoding="utf-8") as f:
             json.dump(pseudo, f, indent=2, ensure_ascii=False)
-        
-        # Sync to analytics database
+
+        self._try_incremental_upload(out)
+
         analytics = get_analytics_syncer()
         if analytics:
-            from pathlib import Path
             analytics.sync_profile(
                 session_id=self.session_id,
                 profile_data=pseudo,
-                file_path=Path(out)
+                file_path=Path(out),
             )
-        
+
         return out
 
     def write_meta_json(self, filename: str, payload: dict) -> str:
-        """Write JSON metadata file to <session>/meta/ directory.
-        
-        Args:
-            filename (str): Name of the JSON file to write
-            payload (dict): Dictionary to save as JSON
-            
-        Returns:
-            str: Path to the saved file
-        """
+        """Write JSON metadata file to <session>/meta/ directory."""
         meta_dir = os.path.join(self.session_dir, "meta")
         os.makedirs(meta_dir, exist_ok=True)
         path = os.path.join(meta_dir, filename)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=4, ensure_ascii=False)
+        self._try_incremental_upload(path)
         return path
 
     def _read_json_safe(self, path: str):
@@ -223,46 +208,96 @@ class SessionManager:
             print(f"Could not load JSON from {path}: {e}")
             return None
 
+    def _pending_uploads_path(self) -> str:
+        """Path to pending incremental uploads queue file for this session."""
+        meta_dir = os.path.join(self.session_dir, "meta")
+        os.makedirs(meta_dir, exist_ok=True)
+        return os.path.join(meta_dir, "pending_uploads.json")
+
+    def _load_pending_uploads(self) -> list[str]:
+        """Load queued local paths that still need cloud upload."""
+        path = self._pending_uploads_path()
+        if not os.path.exists(path):
+            return []
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                return [p for p in data if isinstance(p, str)]
+        except Exception:
+            pass
+        return []
+
+    def _save_pending_uploads(self, items: list[str]) -> None:
+        """Persist queued local paths that still need cloud upload."""
+        path = self._pending_uploads_path()
+        deduped = sorted(set(items))
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(deduped, f, indent=2, ensure_ascii=False)
+
+    def _queue_pending_upload(self, file_path: str) -> None:
+        """Add a file path to the incremental upload retry queue."""
+        pending = self._load_pending_uploads()
+        pending.append(file_path)
+        self._save_pending_uploads(pending)
+
+    def _try_incremental_upload(self, file_path: str) -> None:
+        """Best-effort immediate upload to Supabase plus retry of pending files."""
+        try:
+            from supabase_storage import get_supabase_storage
+
+            storage = get_supabase_storage()
+            if not storage or not storage.connected:
+                self._queue_pending_upload(file_path)
+                return
+
+            current_ok = storage.upload_single_file(self, Path(file_path))
+            if not current_ok:
+                self._queue_pending_upload(file_path)
+                return
+
+            pending = self._load_pending_uploads()
+            if file_path in pending:
+                pending.remove(file_path)
+
+            still_pending = []
+            for queued_path in pending[:10]:
+                ok = storage.upload_single_file(self, Path(queued_path))
+                if not ok:
+                    still_pending.append(queued_path)
+
+            still_pending.extend(pending[10:])
+            self._save_pending_uploads(still_pending)
+
+        except Exception:
+            self._queue_pending_upload(file_path)
+
     def save_knowledge_test_results(self, result_dict: dict) -> str:
-        """Save knowledge test results as JSON.
-
-        Args:
-            result_dict (dict): The test results as a dictionary
-
-        Returns:
-            str: Path to the saved results file
-        """
+        """Save knowledge test results as JSON."""
         path = os.path.join(self.knowledge_test_dir, "knowledge_test_results.json")
         os.makedirs(self.knowledge_test_dir, exist_ok=True)
         payload = {
             "language_code": self.language_code,
             "session_id": self.session_id,
-            **result_dict
+            **result_dict,
         }
         with open(path, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False)
-        
-        # Sync to analytics database
+
+        self._try_incremental_upload(path)
+
         analytics = get_analytics_syncer()
         if analytics:
-            from pathlib import Path
             analytics.sync_knowledge_test(
                 session_id=self.session_id,
                 results=payload,
-                file_path=Path(path)
+                file_path=Path(path),
             )
-        
+
         return path
 
     def save_interaction_analytics(self, interaction_counts):
-        """Save interaction analytics for research analysis.
-
-        Args:
-            interaction_counts (dict): Dictionary with interaction statistics
-
-        Returns:
-            str: Path to the saved analytics file
-        """
+        """Save interaction analytics for research analysis."""
         filename = "interaction_analytics.json"
         file_path = os.path.join(self.analytics_dir, filename)
 
@@ -274,103 +309,87 @@ class SessionManager:
             "engagement_metrics": {
                 "total_user_interactions": interaction_counts.get("total_user_interactions", 0),
                 "slide_to_chat_ratio": (
-                    interaction_counts.get("slide_explanations", 0) / 
-                    max(interaction_counts.get("manual_chat", 1), 1)  # Avoid division by zero
+                    interaction_counts.get("slide_explanations", 0)
+                    / max(interaction_counts.get("manual_chat", 1), 1)
                 ),
                 "interaction_distribution": {
                     "slide_explanations_pct": (
-                        interaction_counts.get("slide_explanations", 0) / 
-                        max(interaction_counts.get("total_user_interactions", 1), 1) * 100
+                        interaction_counts.get("slide_explanations", 0)
+                        / max(interaction_counts.get("total_user_interactions", 1), 1)
+                        * 100
                     ),
                     "manual_chat_pct": (
-                        interaction_counts.get("manual_chat", 0) / 
-                        max(interaction_counts.get("total_user_interactions", 1), 1) * 100
-                    )
-                }
-            }
+                        interaction_counts.get("manual_chat", 0)
+                        / max(interaction_counts.get("total_user_interactions", 1), 1)
+                        * 100
+                    ),
+                },
+            },
         }
 
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(analytics_data, f, indent=4)
 
+        self._try_incremental_upload(file_path)
         return file_path
 
     def save_learning_log(self, log_data):
-        """Save learning interaction logs in both TXT and JSON formats.
-
-        Args:
-            log_data (dict): The log data to save
-
-        Returns:
-            str: Path to the saved log file (txt)
-        """
+        """Save learning interaction logs in both TXT and JSON formats."""
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         filename_txt = f"learning_log_{timestamp}.txt"
         filename_json = "learning_interactions.json"
         file_path_txt = os.path.join(self.learning_logs_dir, filename_txt)
         file_path_json = os.path.join(self.learning_logs_dir, filename_json)
 
-        # Save as TXT (for human readability)
         with open(file_path_txt, "w", encoding="utf-8") as f:
-            # Write session information
             f.write(f"Session ID: {log_data['session_id']}\n")
             f.write(f"Fake Name: {log_data['fake_name']}\n")
             f.write(f"Language: {self.language_code}\n\n")
             f.write(f"Timestamp: {log_data['timestamp']}\n")
-            
-            # Write interaction summary if available
+
             if "interaction_counts" in log_data:
                 counts = log_data["interaction_counts"]
                 f.write("\n=== INTERACTION SUMMARY ===\n")
                 f.write(f"Slide Explanations Generated: {counts['slide_explanations']}\n")
                 f.write(f"Manual Chat Messages: {counts['manual_chat']}\n")
                 f.write(f"Total User Interactions: {counts['total_user_interactions']}\n")
-                if counts['total_user_interactions'] > 0:
-                    slide_pct = (counts['slide_explanations'] / counts['total_user_interactions']) * 100
-                    chat_pct = (counts['manual_chat'] / counts['total_user_interactions']) * 100
+                if counts["total_user_interactions"] > 0:
+                    slide_pct = (counts["slide_explanations"] / counts["total_user_interactions"]) * 100
+                    chat_pct = (counts["manual_chat"] / counts["total_user_interactions"]) * 100
                     f.write(f"Interaction Distribution: {slide_pct:.1f}% slides, {chat_pct:.1f}% chat\n")
-            
+
             f.write("\n=== INTERACTIONS ===\n\n")
 
-            # Write each interaction
             for interaction in log_data["interactions"]:
                 f.write(f"--- Interaction at {interaction['timestamp']} ---\n")
                 f.write(f"Type: {interaction['interaction_type']}\n")
                 f.write(f"User Input: {interaction['user_input']}\n")
                 f.write(f"System Response: {interaction['system_response']}\n")
 
-                # Write metadata if available
                 if "metadata" in interaction:
                     f.write("Metadata:\n")
                     for key, value in interaction["metadata"].items():
                         f.write(f"  {key}: {value}\n")
 
                 f.write("\n")
-        
-        # Save as JSON (for analytics database)
+
         with open(file_path_json, "w", encoding="utf-8") as f:
             json.dump(log_data, f, indent=2, ensure_ascii=False)
-        
-        # Sync to analytics database
+
+        self._try_incremental_upload(file_path_txt)
+        self._try_incremental_upload(file_path_json)
+
         analytics = get_analytics_syncer()
         if analytics:
-            from pathlib import Path
             analytics.sync_learning_log(
                 session_id=self.session_id,
-                log_path=Path(file_path_json)
+                log_path=Path(file_path_json),
             )
 
         return file_path_txt
 
     def save_ueq_responses(self, response_text):
-        """Save UEQ survey responses.
-
-        Args:
-            response_text (str): The UEQ responses as text
-
-        Returns:
-            str: Path to the saved responses file
-        """
+        """Save UEQ survey responses."""
         filename = "ueq_responses.txt"
         file_path = os.path.join(self.ueq_dir, filename)
 
@@ -378,54 +397,42 @@ class SessionManager:
             f.write(f"Language: {self.language_code}\n\n")
             f.write(response_text)
 
+        self._try_incremental_upload(file_path)
         return file_path
 
     def get_session_info(self) -> dict:
-        """Get information about the current session including baseline experiment metadata.
-
-        Returns:
-            dict: Session information with language, model, content version, etc.
-        """
+        """Get information about the current session including baseline experiment metadata."""
         info = {
             "session_id": getattr(self, "session_id", None),
             "fake_name": self.session_id.split("_", 1)[1] if hasattr(self, "session_id") else None,
             "timestamp": self.session_id.split("_", 1)[0] if hasattr(self, "session_id") else None,
             "session_dir": getattr(self, "session_dir", None),
             "language_code": getattr(self, "language_code", None),
-            "login_username": getattr(self, "login_username", None),  # Actual login user
+            "login_username": getattr(self, "login_username", None),
         }
-        
-        # Try to load experiment metadata if available
+
         try:
             meta_path = os.path.join(self.session_dir, "meta", "experiment_meta.json")
             if os.path.exists(meta_path):
                 with open(meta_path, "r", encoding="utf-8") as f:
                     meta = json.load(f)
-                info.update({
-                    "model_name": meta.get("model"),
-                    "model_provider": meta.get("provider"),
-                    "content_version": {
-                        "slides_hash": meta.get("slides_hash"),
-                        "transcript_hash": meta.get("transcript_hash"),
-                    },
-                })
+                info.update(
+                    {
+                        "model_name": meta.get("model"),
+                        "model_provider": meta.get("provider"),
+                        "content_version": {
+                            "slides_hash": meta.get("slides_hash"),
+                            "transcript_hash": meta.get("transcript_hash"),
+                        },
+                    }
+                )
         except Exception:
-            # Keep info minimal if meta not yet written
             pass
-        
+
         return info
 
     def save_ueq(self, answers: dict, benchmark: dict, free_text: str | None) -> str:
-        """Save UEQ results as JSON.
-
-        Args:
-            answers: dict of q1..q26 -> 1..7
-            benchmark: dict with 'means' and 'grades'
-            free_text: optional comment
-
-        Returns:
-            str: Path to saved file
-        """
+        """Save UEQ results as JSON."""
         payload = {
             "answers": answers,
             "scale_means": benchmark["means"],
@@ -438,21 +445,21 @@ class SessionManager:
         os.makedirs(self.ueq_dir, exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False)
-        
-        # Sync to analytics database
+
+        self._try_incremental_upload(path)
+
         analytics = get_analytics_syncer()
         if analytics:
-            from pathlib import Path
             ueq_data = {
                 "means": benchmark["means"],
-                "grades": benchmark["grades"]
+                "grades": benchmark["grades"],
             }
             analytics.sync_ueq(
                 session_id=self.session_id,
                 ueq_data=ueq_data,
-                file_path=Path(path)
+                file_path=Path(path),
             )
-        
+
         return path
 
     def create_final_analytics(self):
@@ -584,6 +591,8 @@ class SessionManager:
         final_analytics_path = os.path.join(self.analytics_dir, "final_research_analytics.json")
         with open(final_analytics_path, "w", encoding="utf-8") as f:
             json.dump(final_analytics, f, indent=4, ensure_ascii=False)
+
+        self._try_incremental_upload(final_analytics_path)
 
         return final_analytics_path
 
