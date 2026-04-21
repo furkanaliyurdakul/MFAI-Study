@@ -30,6 +30,14 @@ def _extract_error(result):
     return None
 
 
+def _is_duplicate_error(error_obj) -> bool:
+    """Return True when Supabase reports an already-existing object."""
+    if not error_obj:
+        return False
+    text = str(error_obj).lower()
+    return "already exists" in text or "statuscode': 409" in text or '"statuscode": 409' in text
+
+
 class SupabaseStorage:
     """Handles uploading all original local session files to Supabase Storage."""
     
@@ -249,9 +257,10 @@ class SupabaseStorage:
                             history = existing["history"]
                     except Exception:
                         history = []
-                history.append(payload)
-                payload["history"] = history[-50:]
-                status_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+                history.append(payload.copy())
+                current_payload = dict(payload)
+                current_payload["history"] = history[-50:]
+                status_path.write_text(json.dumps(current_payload, indent=2, ensure_ascii=False), encoding="utf-8")
             except Exception as e:
                 logger.warning(f"Could not write upload status file: {e}")
 
@@ -325,7 +334,7 @@ class SupabaseStorage:
             )
 
             err = _extract_error(result)
-            if err and "already exists" in str(err).lower():
+            if _is_duplicate_error(err):
                 result = self.supabase.storage.from_(self.bucket_name).update(
                     path=supabase_path,
                     file=file_data,
@@ -356,6 +365,17 @@ class SupabaseStorage:
             return True
 
         except Exception as e:
+            if _is_duplicate_error(e):
+                logger.info(f"Incremental upload skipped (already exists): {file_path}")
+                self._record_upload_status(
+                    session_manager,
+                    status="ok",
+                    phase="incremental",
+                    detail=f"already_exists: {file_path}",
+                    uploaded_files=1,
+                    failed_files=0,
+                )
+                return True
             logger.warning(f"Incremental upload exception for {file_path}: {e}")
             self._record_upload_status(
                 session_manager,

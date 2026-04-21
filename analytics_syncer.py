@@ -25,6 +25,7 @@ class AnalyticsSyncer:
             supabase_client: Supabase client instance (with service_key for write access)
         """
         self.supabase = supabase_client
+        self._upload_status_table_missing_logged = False
     
     def create_session_record(self, session_id: str, user_id: str, language_code: str) -> bool:
         """Create initial session analytics record.
@@ -358,6 +359,9 @@ class AnalyticsSyncer:
         Writes to optional table `storage_upload_status`. If the table does not
         exist yet, this method returns False but does not raise.
         """
+        if self._upload_status_table_missing_logged:
+            return False
+
         try:
             payload = {
                 "session_id": session_id,
@@ -371,6 +375,16 @@ class AnalyticsSyncer:
             self.supabase.table("storage_upload_status").insert(payload).execute()
             return True
         except Exception as e:
+            error_text = str(e)
+            missing_table = "PGRST205" in error_text and "storage_upload_status" in error_text
+            if missing_table:
+                if not self._upload_status_table_missing_logged:
+                    logger.warning(
+                        "Upload status events disabled: optional table 'storage_upload_status' is missing. "
+                        "Apply output/STORAGE_UPLOAD_STATUS.sql to enable this telemetry."
+                    )
+                    self._upload_status_table_missing_logged = True
+                return False
             logger.warning(f"Upload status event not persisted for {session_id}: {e}")
             return False
 
